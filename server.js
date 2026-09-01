@@ -560,6 +560,41 @@ io.on("connection",socket=>{
     }
   });
 });
+// スペース削除
+app.delete("/api/space/:sid",auth,(req,res)=>{
+  const d=req.db;
+  const s=d.spaces[req.params.sid];
+
+  if(!s){
+    return res.status(404).json({
+      error:"スペースがありません"
+    });
+  }
+
+  if(s.owner!==req.uid){
+    return res.status(403).json({
+      error:"このスペースの管理者ではありません"
+    });
+  }
+
+  if(s.owner==="system"){
+    return res.status(400).json({
+      error:"このスペースは削除できません"
+    });
+  }
+
+  delete d.spaces[req.params.sid];
+
+  save(d);
+
+  io.emit("spaceUpdate",{
+    sid:req.params.sid
+  });
+
+  res.json({
+    ok:true
+  });
+});
 // ルーム削除
 app.delete("/api/space/:sid/room/:rid",auth,(req,res)=>{
   const d=req.db;
