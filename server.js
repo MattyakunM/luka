@@ -560,6 +560,50 @@ io.on("connection",socket=>{
     }
   });
 });
+// ルーム削除
+app.delete("/api/space/:sid/room/:rid",auth,(req,res)=>{
+  const d=req.db;
+  const s=d.spaces[req.params.sid];
+
+  if(!s){
+    return res.status(404).json({
+      error:"スペースがありません"
+    });
+  }
+
+  if(s.owner!==req.uid){
+    return res.status(403).json({
+      error:"このスペースの管理者ではありません"
+    });
+  }
+
+  const rid=req.params.rid;
+  const room=s.rooms[rid];
+
+  if(!room){
+    return res.status(404).json({
+      error:"部屋がありません"
+    });
+  }
+
+  if(room.name==="ロビー"){
+    return res.status(400).json({
+      error:"ロビーは削除できません"
+    });
+  }
+
+  delete s.rooms[rid];
+
+  save(d);
+
+  io.emit("spaceUpdate",{
+    sid:s.id
+  });
+
+  res.json({
+    ok:true
+  });
+});
 
 const port=process.env.PORT||3000;
 
