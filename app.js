@@ -5,7 +5,7 @@ async function login(){try{let j=await fetch("/api/login",{method:"POST",headers
 async function register(){try{let j=await fetch("/api/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:$("user").value,password:$("pass").value,displayName:$("display").value})});let x=await j.json();if(!j.ok)throw Error(x.error);token=x.token;localStorage.setItem("luka_token",token);start()}catch(e){$("authmsg").textContent=e.message}}
 async function start(){try{let b=await api("/api/bootstrap");me=b.me;state=b; $("auth").classList.add("hidden");$("app").classList.remove("hidden");socket=io();socket.on("connect",()=>socket.emit("identify",token));socket.on("message",m=>{if(current.rid)loadRoom();});socket.on("reaction",()=>loadRoom());socket.on("presence",p=>{if(p.online&&!state.online.includes(p.id))state.online.push(p.id);if(!p.online)state.online=state.online.filter(x=>x!==p.id);if(dmUser) $("presence").textContent=state.online.includes(dmUser.id)?"● オンライン":"○ オフライン"});socket.on("dm",m=>{if(dmUser)loadDM()});socket.on("friendUpdate",refresh);socket.on("friendRequest",refresh);renderSpaces();showHome()}catch(e){localStorage.removeItem("luka_token");$("authmsg").textContent=e.message}}
 async function refresh(){state=await api("/api/bootstrap");renderSpaces()}
-function function renderSpaces(){
+function renderSpaces(){
   $("spaceList").innerHTML=state.spaces.map(s=>`
     <div class="space-item">
       <button class="spacebtn"
