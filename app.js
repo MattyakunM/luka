@@ -5,7 +5,28 @@ async function login(){try{let j=await fetch("/api/login",{method:"POST",headers
 async function register(){try{let j=await fetch("/api/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:$("user").value,password:$("pass").value,displayName:$("display").value})});let x=await j.json();if(!j.ok)throw Error(x.error);token=x.token;localStorage.setItem("luka_token",token);start()}catch(e){$("authmsg").textContent=e.message}}
 async function start(){try{let b=await api("/api/bootstrap");me=b.me;state=b; $("auth").classList.add("hidden");$("app").classList.remove("hidden");socket=io();socket.on("connect",()=>socket.emit("identify",token));socket.on("message",m=>{if(current.rid)loadRoom();});socket.on("reaction",()=>loadRoom());socket.on("presence",p=>{if(p.online&&!state.online.includes(p.id))state.online.push(p.id);if(!p.online)state.online=state.online.filter(x=>x!==p.id);if(dmUser) $("presence").textContent=state.online.includes(dmUser.id)?"● オンライン":"○ オフライン"});socket.on("dm",m=>{if(dmUser)loadDM()});socket.on("friendUpdate",refresh);socket.on("friendRequest",refresh);renderSpaces();showHome()}catch(e){localStorage.removeItem("luka_token");$("authmsg").textContent=e.message}}
 async function refresh(){state=await api("/api/bootstrap");renderSpaces()}
-function renderSpaces(){ $("spaceList").innerHTML=state.spaces.map((s,i)=>`<button class="spacebtn" title="${esc(s.name)}" onclick="selectSpace('${s.id}')">${esc(s.name[0]||"S")}</button>`).join("");if(state.spaces[0]&&!current.sid)selectSpace(state.spaces[0].id)}
+function function renderSpaces(){
+  $("spaceList").innerHTML=state.spaces.map(s=>`
+    <div class="space-item">
+      <button class="spacebtn"
+        title="${esc(s.name)}"
+        onclick="selectSpace('${s.id}')">
+        ${esc(s.name[0]||"S")}
+      </button>
+      ${
+        s.owner===me.id && s.owner!=="system"
+        ? `<button class="space-delete"
+             title="スペースを削除"
+             onclick="event.stopPropagation();deleteSpace('${s.id}','${esc(s.name)}')">🗑️</button>`
+        : ""
+      }
+    </div>
+  `).join("");
+
+  if(state.spaces[0]&&!current.sid){
+    selectSpace(state.spaces[0].id);
+  }
+}
 function selectSpace(id){
   let s=state.spaces.find(x=>x.id===id);
 
@@ -73,5 +94,24 @@ async function deleteRoom(sid,rid,name){
     alert(e.message);
   }
 }
+async function deleteSpace(sid,name){
+  if(!confirm(`「${name}」を削除しますか？\n\nこのスペースのルーム・メッセージもすべて削除されます。`)){
+    return;
+  }
 
+  try{
+    await api(`/api/space/${sid}`,{
+      method:"DELETE"
+    });
+
+    state=await api("/api/bootstrap");
+
+    current={sid:null,rid:null};
+    renderSpaces();
+    showHome();
+
+  }catch(e){
+    alert(e.message);
+  }
+}
 if(token)start()
