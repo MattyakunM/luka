@@ -1,117 +1,26 @@
-let token=localStorage.getItem("luka_token"),me=null,state={spaces:[],friends:[],incoming:[],outgoing:[],online:[]},socket=null,current={sid:null,rid:null},dmUser=null;
-const $=id=>document.getElementById(id), api=async(u,o={})=>{o.headers={...(o.headers||{}),Authorization:"Bearer "+token,"Content-Type":"application/json"};let r=await fetch(u,o);let j=await r.json();if(!r.ok)throw Error(j.error||"エラー");return j};
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-async function login(){try{let j=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:$("user").value,password:$("pass").value})});let x=await j.json();if(!j.ok)throw Error(x.error);token=x.token;localStorage.setItem("luka_token",token);start()}catch(e){$("authmsg").textContent=e.message}}
-async function register(){try{let j=await fetch("/api/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:$("user").value,password:$("pass").value,displayName:$("display").value})});let x=await j.json();if(!j.ok)throw Error(x.error);token=x.token;localStorage.setItem("luka_token",token);start()}catch(e){$("authmsg").textContent=e.message}}
-async function start(){try{let b=await api("/api/bootstrap");me=b.me;state=b; $("auth").classList.add("hidden");$("app").classList.remove("hidden");socket=io();socket.on("connect",()=>socket.emit("identify",token));socket.on("message",m=>{if(current.rid)loadRoom();});socket.on("reaction",()=>loadRoom());socket.on("presence",p=>{if(p.online&&!state.online.includes(p.id))state.online.push(p.id);if(!p.online)state.online=state.online.filter(x=>x!==p.id);if(dmUser) $("presence").textContent=state.online.includes(dmUser.id)?"● オンライン":"○ オフライン"});socket.on("dm",m=>{if(dmUser)loadDM()});socket.on("friendUpdate",refresh);socket.on("friendRequest",refresh);renderSpaces();showHome()}catch(e){localStorage.removeItem("luka_token");$("authmsg").textContent=e.message}}
-async function refresh(){state=await api("/api/bootstrap");renderSpaces()}
-function renderSpaces(){
-  $("spaceList").innerHTML=state.spaces.map(s=>`
-    <div class="space-item">
-      <button class="spacebtn"
-        title="${esc(s.name)}"
-        onclick="selectSpace('${s.id}')">
-        ${esc(s.name[0]||"S")}
-      </button>
-      ${
-        s.owner===me.id && s.owner!=="system"
-        ? `<button class="space-delete"
-             title="スペースを削除"
-             onclick="event.stopPropagation();deleteSpace('${s.id}','${esc(s.name)}')">🗑️</button>`
-        : ""
-      }
-    </div>
-  `).join("");
-
-  if(state.spaces[0]&&!current.sid){
-    selectSpace(state.spaces[0].id);
-  }
-}
-function selectSpace(id){
-  let s=state.spaces.find(x=>x.id===id);
-
-  if(!s||!s.rooms.length)return;
-
-  current.sid=id;
-
-  $("spaceName").textContent=s.name;
-
-  $("roomList").innerHTML=s.rooms.map((r,i)=>`
-    <div class="room ${i===0?'active':''}"
-         onclick="selectRoom('${s.id}','${r.id}')">
-      <span># ${esc(r.name)}</span>
-      ${
-        s.owner===me.id && r.name!=="ロビー"
-        ? `<button class="room-delete"
-             onclick="event.stopPropagation();deleteRoom('${s.id}','${r.id}','${esc(r.name)}')">🗑️</button>`
-        : ""
-      }
-    </div>
-  `).join("");
-
-  selectRoom(s.id,s.rooms[0].id);
-}
-function selectRoom(sid,rid){current={sid,rid};socket?.emit("joinRoom",{sid,rid});let s=state.spaces.find(x=>x.id===sid),r=s.rooms.find(x=>x.id===rid);$("title").textContent="# "+r.name;loadRoom()}
-async function loadRoom(){let j=await api(`/api/room/${current.sid}/${current.rid}`);let s=state.spaces.find(x=>x.id===current.sid);$("content").innerHTML=`<div id="chat" class="content">${j.messages.map(m=>msg(m)).join("")}</div><div class="send"><input id="chatInput" placeholder="メッセージを入力…"><button onclick="sendMsg()">送信</button></div>`;$("chat").scrollTop=$("chat").scrollHeight}
-function msg(m){let u=Object.values(state).length?((state.friends||[]).find(x=>x.id===m.userId)||null):null;let name=m.userId===me.id?me.displayName:(u?.displayName||"ユーザー");let rs=Object.entries(m.reactions||{}).map(([e,a])=>`<button class="react" onclick="react('${m.id}','${e}')">${e} ${a.length}</button>`).join(" ");return `<div class="message"><span class="name">${esc(name)}</span><span class="time">${new Date(m.createdAt).toLocaleString()}</span><div class="bubble">${esc(m.text)}</div>${rs||`<button class="react" onclick="react('${m.id}','👍')">＋👍</button>`}</div>`}
-function sendMsg(){let x=$("chatInput");if(!x?.value.trim())return;socket.emit("message",{...current,text:x.value});x.value=""}
-function react(id,e){socket.emit("reaction",{...current,messageId:id,emoji:e})}
-function showHome(){$("title").textContent="ホーム";$("presence").textContent="";$("content").innerHTML=`<div class="content"><div class="panel"><h2>ようこそ、${esc(me.displayName)}！</h2><p>Luka v1.6。ここはスペースと部屋を使って、友達とリアルタイムにつながる場所です。</p><div class="grid"><div class="item"><b>🎙 ボイス</b><p>次の拡張でWebRTC音声・ビデオ通話を追加できる構成です。</p></div><div class="item"><b>⚡ リアルタイム</b><p>Socket.IOでメッセージ・リアクション・DMを即時同期。</p></div><div class="item"><b>📱 レスポンシブ</b><p>PC・タブレット・スマホ幅に対応。</p></div></div></div></div>`}
-function showFriends(){$("title").textContent="フレンド";$("presence").textContent="";$("content").innerHTML=`<div class="content"><div class="panel"><h2>フレンド</h2><div class="grid">${state.friends.map(u=>`<div class="item"><b>${esc(u.displayName)}</b><p>@${esc(u.username)}</p><small>${state.online.includes(u.id)?"● オンライン":"○ オフライン"}</small><div class="actions"><button onclick='openDM(${JSON.stringify(u)})'>DM</button></div></div>`).join("")||"<p>まだフレンドがいません。</p>"}</div><h3>届いた申請</h3>${state.incoming.map(x=>`<div class="item">${esc(x.user.displayName)} <button onclick="respond('${x.id}',true)">承認</button> <button class="sub" onclick="respond('${x.id}',false)">拒否</button></div>`).join("")}</div></div>`}
-async function respond(id,accept){await api("/api/friend/respond",{method:"POST",body:JSON.stringify({id,accept})});await refresh();showFriends()}
-function showSearch(){$("title").textContent="検索";$("content").innerHTML=`<div class="content"><div class="panel"><h2>ユーザー検索</h2><div class="send"><input id="q" placeholder="@ユーザー名 / 表示名"><button onclick="doSearch()">検索</button></div><div id="results"></div></div></div>`}
-async function doSearch(){let r=await api("/api/search?q="+encodeURIComponent($("q").value));$("results").innerHTML=r.map(u=>`<div class="item"><b>${esc(u.displayName)}</b> <small>@${esc(u.username)}</small><div class="actions"><button onclick="addFriend('${u.id}')">フレンド申請</button></div></div>`).join("")||"<p>見つかりませんでした。</p>"}
-async function addFriend(id){try{await api("/api/friend/request",{method:"POST",body:JSON.stringify({to:id})});alert("申請しました！")}catch(e){alert(e.message)}}
-async function openDM(u){dmUser=u;$("title").textContent="DM · "+u.displayName;$("presence").textContent=state.online.includes(u.id)?"● オンライン":"○ オフライン";loadDM()}
-async function loadDM(){let j=await api("/api/dm/"+dmUser.id);$("content").innerHTML=`<div id="chat" class="content">${j.messages.map(m=>`<div class="message"><b>${m.from===me.id?"自分":esc(dmUser.displayName)}</b><span class="time">${new Date(m.createdAt).toLocaleString()}</span><div class="bubble">${esc(m.text)}</div></div>`).join("")}</div><div class="send"><input id="dmInput" placeholder="${esc(dmUser.displayName)}さんへ…"><button onclick="sendDM()">送信</button></div>`;$("chat").scrollTop=$("chat").scrollHeight}
-function sendDM(){let x=$("dmInput");if(x.value.trim())socket.emit("dm",{to:dmUser.id,text:x.value.trim()});x.value=""}
-async function newSpace(){let n=prompt("スペース名");if(!n)return;await api("/api/space",{method:"POST",body:JSON.stringify({name:n})});state=await api("/api/bootstrap");renderSpaces()}
-async function newRoom(){if(!current.sid)return;let n=prompt("部屋名");if(!n)return;await api("/api/space/"+current.sid+"/room",{method:"POST",body:JSON.stringify({name:n})});state=await api("/api/bootstrap");selectSpace(current.sid)}
-function showProfile(){$("title").textContent="プロフィール";$("content").innerHTML=`<div class="content"><div class="panel"><h2>${esc(me.displayName)}</h2><p>@${esc(me.username)}</p><p>${esc(me.bio||"プロフィール文はまだありません。")}</p><div class="actions"><button onclick="logout()">ログアウト</button></div><hr><small>Luka v1.6</small></div></div>`}
-async function logout(){await api("/api/logout",{method:"POST"});localStorage.removeItem("luka_token");location.reload()}
-async function deleteRoom(sid,rid,name){
-  if(!confirm(`「${name}」を削除しますか？\n\nこの部屋のメッセージもすべて削除されます。`)){
-    return;
-  }
-
-  try{
-    await api(`/api/space/${sid}/room/${rid}`,{
-      method:"DELETE"
-    });
-
-    state=await api("/api/bootstrap");
-
-    const s=state.spaces.find(x=>x.id===sid);
-
-    if(s&&s.rooms.length){
-      current.sid=sid;
-      selectSpace(sid);
-    }else{
-      showHome();
-    }
-
-  }catch(e){
-    alert(e.message);
-  }
-}
-async function deleteSpace(sid,name){
-  if(!confirm(`「${name}」を削除しますか？\n\nこのスペースのルーム・メッセージもすべて削除されます。`)){
-    return;
-  }
-
-  try{
-    await api(`/api/space/${sid}`,{
-      method:"DELETE"
-    });
-
-    state=await api("/api/bootstrap");
-
-    current={sid:null,rid:null};
-    renderSpaces();
-    showHome();
-
-  }catch(e){
-    alert(e.message);
-  }
-}
-if(token)start()
+let token=localStorage.getItem("luka_token"), me=null, currentSpace=null, currentRoom=null, socket=null;
+const $=id=>document.getElementById(id);
+function api(url,opt={}){opt.headers={...(opt.headers||{}),Authorization:"Bearer "+token,"Content-Type":"application/json"};return fetch(url,opt).then(async r=>{const j=await r.json();if(!r.ok)throw Error(j.error||"エラー");return j})}
+async function login(){try{const j=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:$("username").value,password:$("password").value})}).then(r=>r.json());if(j.error)throw Error(j.error);token=j.token;localStorage.setItem("luka_token",token);start(j.user)}catch(e){$("authMsg").textContent=e.message}}
+async function register(){try{const j=await fetch("/api/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:$("username").value,password:$("password").value})}).then(r=>r.json());if(j.error)throw Error(j.error);token=j.token;localStorage.setItem("luka_token",token);start(j.user)}catch(e){$("authMsg").textContent=e.message}}
+async function start(u){me=u;$("auth").classList.add("hidden");$("app").classList.remove("hidden");$("me").textContent=u.displayName+(u.isAdmin?" 👑":"");$("adminBtn").classList.toggle("hidden",!u.isAdmin);socket=io({auth:{token}});socket.on("message",m=>{if(currentRoom) addMessage(m)});socket.on("messageEdited",m=>loadMessages());socket.on("messageDeleted",()=>loadMessages());socket.on("spaceUpdate",loadSpaces);await loadSpaces()}
+async function loadSpaces(){const j=await api("/api/spaces");$("spaces").innerHTML=j.spaces.map(s=>`<button class="space-item" onclick="openSpace('${s.id}')">${esc(s.name)}<small>${s.memberCount}人</small></button>`).join("")}
+async function createSpace(){const name=prompt("スペース名");if(!name)return;await api("/api/spaces",{method:"POST",body:JSON.stringify({name})});loadSpaces()}
+async function joinSpace(){const code=prompt("招待コード");if(!code)return;try{await api("/api/invites/join",{method:"POST",body:JSON.stringify({code})});await loadSpaces();alert("スペースに参加しました")}catch(e){alert(e.message)}}
+async function openSpace(sid){const j=await api("/api/spaces/"+sid);currentSpace=j.space;$("welcome").classList.add("hidden");$("adminView").classList.add("hidden");$("spaceView").classList.remove("hidden");$("spaceName").textContent=currentSpace.name;$("spaceMeta").textContent=`${currentSpace.members.length}人 / 招待制`;renderRooms();const rid=Object.keys(currentSpace.rooms)[0];if(rid)openRoom(rid)}
+function renderRooms(){$("rooms").innerHTML=Object.entries(currentSpace.rooms).map(([id,r])=>`<button onclick="openRoom('${id}')">${esc(r.name)}</button>`).join("")}
+async function openRoom(rid){currentRoom=rid;$("roomTitle").textContent=currentSpace.rooms[rid].name;socket.emit("joinRoom",{sid:currentSpace.id,rid});await loadMessages()}
+async function loadMessages(){const j=await api(`/api/spaces/${currentSpace.id}/rooms/${currentRoom}/messages`);$("messages").innerHTML="";j.messages.forEach(addMessage)}
+function addMessage(m){const d=document.createElement("div");d.className="message";d.dataset.id=m.id;d.innerHTML=`<b>${esc(m.username)}</b><span>${esc(m.text)}</span>${m.edited?" <small>(編集済み)</small>":""}${m.uid===me.id||me.isAdmin?`<button onclick="editMsg('${m.id}')">編集</button><button onclick="deleteMsg('${m.id}')">削除</button>`:""}`;$("messages").appendChild(d);$("messages").scrollTop=$("messages").scrollHeight}
+function sendMsg(){const x=$("msg"),t=x.value.trim();if(!t||!currentSpace||!currentRoom)return;socket.emit("message",{sid:currentSpace.id,rid:currentRoom,text:t});x.value=""}
+$("msg").addEventListener("keydown",e=>{if(e.key==="Enter")sendMsg()});
+function editMsg(mid){const text=prompt("新しいメッセージ");if(text!==null)socket.emit("editMessage",{sid:currentSpace.id,rid:currentRoom,mid,text})}
+function deleteMsg(mid){if(confirm("このメッセージを削除しますか？"))socket.emit("deleteMessage",{sid:currentSpace.id,rid:currentRoom,mid})}
+async function createRoom(){const name=prompt("部屋名");if(!name)return;await api(`/api/spaces/${currentSpace.id}/rooms`,{method:"POST",body:JSON.stringify({name})});openSpace(currentSpace.id)}
+async function spaceSettings(){const isOwner=currentSpace.owner===me.id||me.isAdmin;let action=prompt("設定: invite=招待コード / delete=スペース削除");if(action==="invite"){const j=await api(`/api/spaces/${currentSpace.id}/invites`,{method:"POST"});prompt("招待コード（コピーして送ってね）",j.code)}else if(action==="delete"&&isOwner){if(!confirm(`「${currentSpace.name}」を削除しますか？\nこの操作は取り消せません。`))return;await api(`/api/spaces/${currentSpace.id}`,{method:"DELETE"});currentSpace=null;$("spaceView").classList.add("hidden");$("welcome").classList.remove("hidden");loadSpaces()}}
+async function showAdmin(){ $("welcome").classList.add("hidden");$("spaceView").classList.add("hidden");$("adminView").classList.remove("hidden");const j=await api("/api/admin/dashboard");$("adminContent").innerHTML=`<h3>通報 ${j.reports.length}件</h3>`+j.reports.map(r=>`<div class="card"><b>${esc(r.reason)}</b><p>通報者: ${esc(r.reporter?.username||"-")} / 対象: ${esc(r.targetUser?.username||r.target||"-")}</p><small>${r.status}</small>${r.status==="open"?`<button onclick="resolveReport('${r.id}')">対応済みにする</button>`:""}</div>`).join("")+`<h3>全スペース ${j.spaces.length}件</h3>`+j.spaces.map(s=>`<div class="card"><b>${esc(s.name)}</b> — ${s.memberCount}人 <button onclick="openSpace('${s.id}')">開く</button></div>`).join("")}
+async function resolveReport(id){await api("/api/admin/reports/"+id+"/resolve",{method:"POST"});showAdmin()}
+function backHome(){$("adminView").classList.add("hidden");$("welcome").classList.remove("hidden")}
+function logout(){localStorage.removeItem("luka_token");location.reload()}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+if(token)api("/api/me").then(j=>start(j.user)).catch(()=>localStorage.removeItem("luka_token"));
