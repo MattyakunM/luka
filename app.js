@@ -6,7 +6,30 @@ async function register(){try{let j=await fetch("/api/register",{method:"POST",h
 async function start(){try{let b=await api("/api/bootstrap");me=b.me;state=b; $("auth").classList.add("hidden");$("app").classList.remove("hidden");socket=io();socket.on("connect",()=>socket.emit("identify",token));socket.on("message",m=>{if(current.rid)loadRoom();});socket.on("reaction",()=>loadRoom());socket.on("presence",p=>{if(p.online&&!state.online.includes(p.id))state.online.push(p.id);if(!p.online)state.online=state.online.filter(x=>x!==p.id);if(dmUser) $("presence").textContent=state.online.includes(dmUser.id)?"● オンライン":"○ オフライン"});socket.on("dm",m=>{if(dmUser)loadDM()});socket.on("friendUpdate",refresh);socket.on("friendRequest",refresh);renderSpaces();showHome()}catch(e){localStorage.removeItem("luka_token");$("authmsg").textContent=e.message}}
 async function refresh(){state=await api("/api/bootstrap");renderSpaces()}
 function renderSpaces(){ $("spaceList").innerHTML=state.spaces.map((s,i)=>`<button class="spacebtn" title="${esc(s.name)}" onclick="selectSpace('${s.id}')">${esc(s.name[0]||"S")}</button>`).join("");if(state.spaces[0]&&!current.sid)selectSpace(state.spaces[0].id)}
-function selectSpace(id){let s=state.spaces.find(x=>x.id===id);current.sid=id;$("spaceName").textContent=s.name;$("roomList").innerHTML=s.rooms.map((r,i)=>`<div class="room ${i===0?'active':''}" onclick="selectRoom('${s.id}','${r.id}')"># ${esc(r.name)}</div>`).join("");selectRoom(s.id,s.rooms[0].id)}
+function selectSpace(id){
+  let s=state.spaces.find(x=>x.id===id);
+
+  if(!s||!s.rooms.length)return;
+
+  current.sid=id;
+
+  $("spaceName").textContent=s.name;
+
+  $("roomList").innerHTML=s.rooms.map((r,i)=>`
+    <div class="room ${i===0?'active':''}"
+         onclick="selectRoom('${s.id}','${r.id}')">
+      <span># ${esc(r.name)}</span>
+      ${
+        s.owner===me.id && r.name!=="ロビー"
+        ? `<button class="room-delete"
+             onclick="event.stopPropagation();deleteRoom('${s.id}','${r.id}','${esc(r.name)}')">🗑️</button>`
+        : ""
+      }
+    </div>
+  `).join("");
+
+  selectRoom(s.id,s.rooms[0].id);
+}
 function selectRoom(sid,rid){current={sid,rid};socket?.emit("joinRoom",{sid,rid});let s=state.spaces.find(x=>x.id===sid),r=s.rooms.find(x=>x.id===rid);$("title").textContent="# "+r.name;loadRoom()}
 async function loadRoom(){let j=await api(`/api/room/${current.sid}/${current.rid}`);let s=state.spaces.find(x=>x.id===current.sid);$("content").innerHTML=`<div id="chat" class="content">${j.messages.map(m=>msg(m)).join("")}</div><div class="send"><input id="chatInput" placeholder="メッセージを入力…"><button onclick="sendMsg()">送信</button></div>`;$("chat").scrollTop=$("chat").scrollHeight}
 function msg(m){let u=Object.values(state).length?((state.friends||[]).find(x=>x.id===m.userId)||null):null;let name=m.userId===me.id?me.displayName:(u?.displayName||"ユーザー");let rs=Object.entries(m.reactions||{}).map(([e,a])=>`<button class="react" onclick="react('${m.id}','${e}')">${e} ${a.length}</button>`).join(" ");return `<div class="message"><span class="name">${esc(name)}</span><span class="time">${new Date(m.createdAt).toLocaleString()}</span><div class="bubble">${esc(m.text)}</div>${rs||`<button class="react" onclick="react('${m.id}','👍')">＋👍</button>`}</div>`}
