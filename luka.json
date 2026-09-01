@@ -1,0 +1,20 @@
+{
+  "users": {},
+  "spaces": {
+    "general": {
+      "id": "general",
+      "name": "Luka Space",
+      "owner": "system",
+      "rooms": {
+        "lobby": {
+          "id": "lobby",
+          "name": "ロビー",
+          "messages": []
+        }
+      }
+    }
+  },
+  "friendRequests": [],
+  "friendships": [],
+  "dms": {}
+}

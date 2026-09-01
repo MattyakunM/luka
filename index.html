@@ -1,0 +1,6 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Luka</title><link rel="stylesheet" href="/style.css"><script src="/socket.io/socket.io.js"></script></head><body>
+<div id="auth" class="auth"><div class="card"><div class="logo">L</div><h1>Luka</h1><p>つながるためのワークスペース</p><input id="user" placeholder="ユーザー名"><input id="pass" type="password" placeholder="パスワード（6文字以上）"><input id="display" placeholder="表示名（任意）"><div class="row"><button onclick="login()">ログイン</button><button class="sub" onclick="register()">アカウント作成</button></div><div id="authmsg"></div></div></div>
+<div id="app" class="hidden"><aside class="spaces"><div class="brand">L</div><div id="spaceList"></div><button onclick="newSpace()">＋</button></aside>
+<aside class="rooms"><div class="top"><b id="spaceName">Luka Space</b><button onclick="newRoom()">＋</button></div><div id="roomList"></div><hr><button class="nav" onclick="showHome()">⌂ ホーム</button><button class="nav" onclick="showFriends()">♙ フレンド</button><button class="nav" onclick="showSearch()">⌕ 検索</button><button class="nav" onclick="showProfile()">⚙ プロフィール</button></aside>
+<main><header><b id="title">ホーム</b><span id="presence"></span></header><section id="content"></section></main></div>
+<script src="/app.js"></script></body></html>
