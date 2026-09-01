@@ -48,4 +48,30 @@ async function newSpace(){let n=prompt("スペース名");if(!n)return;await api
 async function newRoom(){if(!current.sid)return;let n=prompt("部屋名");if(!n)return;await api("/api/space/"+current.sid+"/room",{method:"POST",body:JSON.stringify({name:n})});state=await api("/api/bootstrap");selectSpace(current.sid)}
 function showProfile(){$("title").textContent="プロフィール";$("content").innerHTML=`<div class="content"><div class="panel"><h2>${esc(me.displayName)}</h2><p>@${esc(me.username)}</p><p>${esc(me.bio||"プロフィール文はまだありません。")}</p><div class="actions"><button onclick="logout()">ログアウト</button></div><hr><small>Luka v1.6</small></div></div>`}
 async function logout(){await api("/api/logout",{method:"POST"});localStorage.removeItem("luka_token");location.reload()}
+async function deleteRoom(sid,rid,name){
+  if(!confirm(`「${name}」を削除しますか？\n\nこの部屋のメッセージもすべて削除されます。`)){
+    return;
+  }
+
+  try{
+    await api(`/api/space/${sid}/room/${rid}`,{
+      method:"DELETE"
+    });
+
+    state=await api("/api/bootstrap");
+
+    const s=state.spaces.find(x=>x.id===sid);
+
+    if(s&&s.rooms.length){
+      current.sid=sid;
+      selectSpace(sid);
+    }else{
+      showHome();
+    }
+
+  }catch(e){
+    alert(e.message);
+  }
+}
+
 if(token)start()
