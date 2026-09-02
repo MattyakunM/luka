@@ -1,11 +1,11 @@
 {
-  "name": "luka-v3-2",
-  "version": "3.2.0",
-  "private": true,
-  "scripts": {"start": "node server.js"},
-  "dependencies": {
-    "express": "^4.21.2",
-    "socket.io": "^4.8.1",
-    "jsonwebtoken": "^9.0.2"
+  "name":"luka-v3-3",
+  "version":"3.3.0",
+  "private":true,
+  "scripts":{"start":"node server.js"},
+  "dependencies":{
+    "express":"^4.21.2",
+    "socket.io":"^4.8.1",
+    "jsonwebtoken":"^9.0.2"
   }
 }
