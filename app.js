@@ -36,6 +36,14 @@ const seed={
   activeRoom:"lobby"
 };
 
+function load(){
+  try{
+    const x=JSON.parse(localStorage.getItem(KEY));
+    if(x && x.accounts) return normalize(x);
+  }catch(e){}
+  return normalize(clone(seed));
+}
+
 let state=load();
 let modalEl=null;
 let toastTimer=null;
