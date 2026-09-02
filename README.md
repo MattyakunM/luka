@@ -1,19 +1,21 @@
-# Luka V5.1.1 — AI + Luka Update
+# Luka V5.2 統合版
 
-## 重要
-- `Luka公式` は `/api/luka-ai` を使う本物のAI接続です。Render側で `OPENAI_API_KEY` が設定されていないとAIは動きません。
-- APIキーは `app.js` やGitHubに書かず、Renderの「環境変数」に設定してください。
-- `LUKA_AI_MODEL` は任意。未設定なら `gpt-5-mini` を使用します。
+## 今回の統合
+- Luka公式AIのサーバー接続
+- Luka管理者AI（管理者「そら」専用UI）
+- Luka Update（投稿UIは管理者のみ）
+- AI接続状態確認
+- 既存のV5チャット/DM/スペース/管理機能を維持
 
 ## Render
-1. GitHubの `main` にこのZIPのファイルを配置・置換。
-2. Renderが `main` をデプロイすることを確認。
-3. Render → Luka → Environment に `OPENAI_API_KEY` を追加。
-4. 保存して再デプロイ。
-5. `/api/luka-ai/status` で `configured:true` を確認。
+Environment Variables:
+- `OPENAI_API_KEY` = OpenAI API key
+- `LUKA_AI_MODEL` = `gpt-5-mini`（任意）
 
-## Luka Update
-`Luka Update` は配信用アカウントです。通常ユーザーは書き込めません。管理者「そら」だけが管理画面の「Luka Updateを投稿」から更新情報を投稿できます。
+API:
+- `/api/luka-ai/status`
+- `/api/luka-admin-ai`
 
-## データ
-`server-data.json` はサーバー起動時に自動生成される実データです。GitHubへコミットしないでください。初期データは `luka.json` です。
+重要:
+- APIキーはGitHubやフロントエンドコードに書かない。
+- V5.2の管理者UI制御はクライアント側。公開運用前にはDBセッションによるサーバー側admin認証が必要。

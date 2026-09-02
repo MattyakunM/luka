@@ -43,3 +43,11 @@ button:hover{filter:brightness(.97)}
 .toast{position:fixed;right:16px;bottom:16px;background:#202124;color:#fff;padding:12px 16px;border-radius:10px;z-index:50}
 .kpi{font-size:28px;font-weight:800}
 @media(max-width:800px){.layout{grid-template-columns:1fr}.sidebar{position:sticky;top:0;z-index:5;flex-direction:row;overflow:auto;border-right:0;border-bottom:1px solid #e1e5ee}.sidebar .brand{display:none}.sidebar .nav{width:auto;white-space:nowrap}.userbox{margin:0;border:0;padding:0}.chat{grid-template-columns:1fr}.chatrooms{display:none}.content{padding:12px}.topbar{padding:10px 12px}}
+
+.luka-v52-tools{margin-top:16px}
+.luka-tool-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;margin:10px 0;padding:10px;border:1px solid #ddd;border-radius:10px}
+.admin-ai-box{grid-template-columns:1fr}
+.admin-ai-box textarea{width:100%;box-sizing:border-box}
+.admin-ai-box pre{white-space:pre-wrap;overflow:auto;margin:0}
+#luka-v52-floating{box-shadow:0 6px 20px rgba(0,0,0,.18)}
+@media(max-width:600px){.luka-tool-row{grid-template-columns:1fr}.luka-tool-row button{width:100%}}
