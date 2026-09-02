@@ -1,13 +1,14 @@
 {
-  "name": "luka",
-  "version": "2.0.0",
+  "name": "luka-v3-9-server-prep",
+  "version": "3.9.0",
   "private": true,
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "migrate:dry": "node migration.js --dry-run"
   },
   "dependencies": {
     "express": "^4.21.2",
     "socket.io": "^4.8.1",
-    "multer": "^1.4.5-lts.1"
+    "jsonwebtoken": "^9.0.2"
   }
 }
