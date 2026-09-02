@@ -1,20 +1,10 @@
 {
-  "users": {},
-  "spaces": {
-    "general": {
-      "id": "general",
-      "name": "Luka Space",
-      "owner": "system",
-      "rooms": {
-        "lobby": {
-          "id": "lobby",
-          "name": "ロビー",
-          "messages": []
-        }
-      }
-    }
-  },
-  "friendRequests": [],
-  "friendships": [],
-  "dms": {}
+  "version": "4.0-local-complete",
+  "note": "初期データ。既存localStorageは上書きしません。",
+  "admin": "sora",
+  "official_accounts": [
+    "official",
+    "update",
+    "adminai"
+  ]
 }
