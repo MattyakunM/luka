@@ -1,9 +1,7 @@
 {
   "name": "luka-web",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
-  "description": "Luka Web v3.0 foundation",
-  "main": "server.js",
   "scripts": {"start": "node server.js"},
   "dependencies": {
     "bcryptjs": "^3.0.2",
