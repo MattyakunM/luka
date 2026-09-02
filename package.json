@@ -1,6 +1,6 @@
 {
-  "name": "luka-v5-ai",
-  "version": "5.1.0",
+  "name": "luka-v5-server-ai",
+  "version": "5.1.1",
   "private": true,
   "scripts": {
     "start": "node server.js"
@@ -9,5 +9,6 @@
     "express": "^4.21.2",
     "socket.io": "^4.8.1",
     "openai": "^5.0.0"
-  }
+  },
+  "description": "Luka V5 server + AI + update feed"
 }

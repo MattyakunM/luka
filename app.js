@@ -134,6 +134,8 @@ function dmMessages(dmId){return state.messages.filter(m=>m.kind==="dm"&&m.dmId=
 function sendDM(text){
   const target=window.currentDM;
   if(!target)return;
+  const targetAccount=acct(target);
+  if(targetAccount?.type==="update"){toast("Luka Update には書き込めません");return;}
   const d=ensureDM(me().id,target);
   const m={id:uid("m"),kind:"dm",dmId:d.id,author:me().id,text,createdAt:Date.now(),edited:false,deleted:false,reactions:{}};
   state.messages.push(m);
@@ -143,25 +145,19 @@ function sendDM(text){
 async function requestLukaAI(text,dmId){
   try{
     const r=await fetch("/api/luka-ai",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        message:text,
-        conversation:dmMessages(dmId).slice(-12).map(m=>({role:m.author==="luka_official"?"assistant":"user",content:m.text}))
-      })
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({message:text,conversation:dmMessages(dmId).slice(-12).map(m=>({role:m.author==="luka_official"?"assistant":"user",content:m.text}))})
     });
-    const data=await r.json();
-    if(!r.ok) throw new Error(data.error||"AI request failed");
-    state.messages.push({
-      id:uid("m"),kind:"dm",dmId,author:"luka_official",
-      text:data.reply,createdAt:Date.now(),edited:false,deleted:false,reactions:{}
-    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(data.error||`AIサーバーエラー (${r.status})`);
+    state.messages.push({id:uid("m"),kind:"dm",dmId,author:"luka_official",text:data.reply||"返答が空でした。",createdAt:Date.now(),edited:false,deleted:false,reactions:{}});
     addNotification(me().id,"Luka公式から返信が届きました","dm");
-    save(); render();
+    save();render();
   }catch(e){
-    console.error(e);
-    // Server/AI is unavailable: keep the local fallback so the DM still works.
-    setTimeout(()=>lukaReply(text,dmId),150);
+    console.error("Luka AI:",e);
+    addNotification(me().id,`Luka AIに接続できませんでした：${e.message}`,"ai_error");
+    save();render();
+    toast("Luka AIに接続できません。管理者設定を確認してください");
   }
 }
 
@@ -252,8 +248,10 @@ function openDM(id){window.currentDM=id;window.page="dm";render()}
 function dmPage(){
   const target=window.currentDM||"luka_official";window.currentDM=target;
   const a=acct(target), d=ensureDM(me().id,target), msgs=dmMessages(d.id);
+  const canSend = a.type !== "update";
+  const composer = canSend ? `<div class="composer"><textarea id="dmText" placeholder="${a.type==="ai"?"Luka公式にメッセージ":"メッセージを入力"}" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDMFromBox()}"></textarea><button class="primary" onclick="sendDMFromBox()">送信</button></div>` : `<div class="composer"><div class="muted">📢 Luka Update は更新情報の配信用アカウントです。通常ユーザーからの書き込みはできません。</div></div>`;
   return `<div class="card" style="padding:0;overflow:hidden"><div class="chat"><div class="chatrooms"><b>DM</b><div class="list" style="margin-top:10px">${state.accounts.filter(a=>a.id!==me().id).map(x=>`<button class="nav ${x.id===target?"active":""}" onclick="openDM('${x.id}')">${esc(x.name)}</button>`).join("")}</div></div>
-  <div class="messages"><div class="message-list" id="messageList">${target==="luka_official"?`<div class="muted" style="padding:8px">🤖 Luka公式：サーバーのAI接続を使用します</div>`:""}${msgs.map(renderMessage).join("")}</div><div class="composer"><textarea id="dmText" placeholder="${a.type==="ai"?"Luka公式にメッセージ":"メッセージを入力"}" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDMFromBox()}"></textarea><button class="primary" onclick="sendDMFromBox()">送信</button></div></div></div></div>`;
+  <div class="messages"><div class="message-list" id="messageList">${target==="luka_official"?`<div class="muted" style="padding:8px">🤖 Luka公式：サーバーのAI接続を使用します</div>`:""}${target==="luka_update"?`<div class="muted" style="padding:8px">📢 Luka Update：管理者からの更新情報のみ表示されます</div>`:""}${msgs.map(renderMessage).join("")}</div>${composer}</div></div></div>`;
 }
 function sendDMFromBox(){const el=document.getElementById("dmText");const t=el.value.trim();if(!t)return;sendDM(t)}
 
@@ -318,12 +316,24 @@ function notificationsPage(){
   return `<div class="card"><h2>通知</h2><div class="list">${ns.map(n=>`<div class="item"><b>${esc(n.type)}</b><div>${esc(n.text)}</div><div class="muted">${new Date(n.createdAt).toLocaleString("ja-JP")}</div></div>`).join("")||"<div class='muted'>通知はありません</div>"}</div>`;
 }
 
+function postUpdate(){
+  if(!isAdmin()){toast("管理者権限が必要です");return;}
+  openModal("Luka Updateを投稿",`<label>更新内容<textarea id="updateText" placeholder="今回のアップデート内容"></textarea></label><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">キャンセル</button><button class="primary" id="ok">投稿</button></div>`,m=>m.querySelector("#ok").onclick=()=>{
+    const text=m.querySelector("#updateText").value.trim();
+    if(!text){toast("更新内容を入力してください");return;}
+    const d=ensureDM("sora","luka_update");
+    state.messages.push({id:uid("m"),kind:"dm",dmId:d.id,author:"luka_update",text,createdAt:Date.now(),edited:false,deleted:false,reactions:{}});
+    state.accounts.filter(a=>a.id!=="sora"&&!a.suspended).forEach(a=>addNotification(a.id,"Luka Updateに新しい更新情報があります","update"));
+    save();closeModal();toast("Luka Updateを投稿しました");render();
+  });
+}
+
 function adminPage(){
   const reports=state.reports.filter(r=>!r.resolved).length;
   const accounts=state.accounts.map(a=>`<div class="item row"><div style="flex:1"><b>${esc(a.name)}</b> <span class="badge">${a.isAdmin?"管理者":a.type}</span><div class="muted">@${esc(a.handle)}</div></div>${a.suspended?"<span class='badge'>停止中</span>":""}<button onclick="switchAccount('${a.id}')">切替</button>${a.id!=="sora"&&a.type==="user"?`<button onclick="toggleSuspend('${a.id}')">${a.suspended?"再開":"停止"}</button>`:""}</div>`).join("");
   const spaces=state.spaces.map(sp=>`<div class="item"><b>${esc(sp.name)}</b><div class="muted">所有者: ${esc(acct(sp.owner)?.name||sp.owner)} / ${sp.members.length}人</div><div class="row">${sp.rooms.map(r=>`<button onclick="adminOpenRoom('${sp.id}','${r.id}')">${esc(r.name)}</button>`).join("")}</div></div>`).join("");
   const reps=state.reports.map(r=>`<div class="item"><b>${esc(r.reason)}</b><div>${esc(r.text||"")}</div><div class="muted">対象: ${esc(acct(r.target)?.name||r.target)}</div>${!r.resolved?`<button class="primary" onclick="resolveReport('${r.id}')">対応済みにする</button>`:"<span class='badge'>対応済み</span>"}</div>`).join("")||"<div class='muted'>通報はありません</div>";
-  return `<div class="grid"><div class="card"><div class="kpi">${state.accounts.length}</div>アカウント</div><div class="card"><div class="kpi">${state.spaces.length}</div>スペース</div><div class="card"><div class="kpi">${reports}</div>未処理通報</div></div><div class="card"><h2>アカウント切替・管理</h2><p class="muted">管理者は「そら」固定。ここから通常アカウントを作成・切替できます。</p><div class="row"><button class="primary" onclick="createAccount()">＋通常アカウント作成</button><button onclick="exportBackup()">バックアップ書き出し</button><button onclick="importBackup()">バックアップ復元</button></div><div class="list" style="margin-top:10px">${accounts}</div></div><div class="card"><h2>全スペース・全ルーム</h2><div class="list">${spaces}</div></div><div class="card"><h2>通報</h2><div class="list">${reps}</div></div>`;
+  return `<div class="grid"><div class="card"><div class="kpi">${state.accounts.length}</div>アカウント</div><div class="card"><div class="kpi">${state.spaces.length}</div>スペース</div><div class="card"><div class="kpi">${reports}</div>未処理通報</div></div><div class="card"><h2>アカウント切替・管理</h2><p class="muted">管理者は「そら」固定。ここから通常アカウントを作成・切替できます。</p><div class="row"><button class="primary" onclick="createAccount()">＋通常アカウント作成</button><button class="primary" onclick="postUpdate()">📢 Luka Updateを投稿</button><button onclick="exportBackup()">バックアップ書き出し</button><button onclick="importBackup()">バックアップ復元</button></div><div class="list" style="margin-top:10px">${accounts}</div></div><div class="card"><h2>全スペース・全ルーム</h2><div class="list">${spaces}</div></div><div class="card"><h2>通報</h2><div class="list">${reps}</div></div>`;
 }
 function createAccount(){
   openModal("通常アカウントを作成",`<label>表示名<input id="an" placeholder="例：ゲーム用"></label><label>ユーザーID<input id="ah" placeholder="英数字"></label><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">キャンセル</button><button class="primary" id="ok">作成</button></div>`,m=>m.querySelector("#ok").onclick=()=>{const n=m.querySelector("#an").value.trim(),h=m.querySelector("#ah").value.trim();if(!n||!h){toast("両方入力してください");return}if(state.accounts.some(a=>a.handle===h)){toast("そのIDは使用済み");return}const a={id:uid("u"),name:n,handle:h,type:"user",isAdmin:false,suspended:false,bio:""};state.accounts.push(a);save();closeModal();switchAccount(a.id)});
@@ -359,7 +369,7 @@ window.view=view;window.closeModal=closeModal;window.accountSwitch=accountSwitch
 window.sendDMFromBox=sendDMFromBox;window.saveProfile=saveProfile;window.sendFriend=sendFriend;window.acceptFriend=acceptFriend;window.rejectFriend=rejectFriend;
 window.selectSpace=selectSpace;window.selectRoom=selectRoom;window.createSpace=createSpace;window.createRoom=createRoom;window.deleteSpace=deleteSpace;window.deleteRoom=deleteRoom;window.sendRoomFromBox=sendRoomFromBox;
 window.react=react;window.togglePin=togglePin;window.editMessage=editMessage;window.deleteMessage=deleteMessage;window.replyTo=replyTo;
-window.createAccount=createAccount;window.switchAccount=switchAccount;window.toggleSuspend=toggleSuspend;window.adminOpenRoom=adminOpenRoom;window.resolveReport=resolveReport;window.reportUser=reportUser;
+window.createAccount=createAccount;window.postUpdate=postUpdate;window.switchAccount=switchAccount;window.toggleSuspend=toggleSuspend;window.adminOpenRoom=adminOpenRoom;window.resolveReport=resolveReport;window.reportUser=reportUser;
 window.saveSettings=saveSettings;window.exportBackup=exportBackup;window.importBackup=importBackup;window.resetLocal=resetLocal;
 
 window.page="home";
