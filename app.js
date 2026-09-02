@@ -83,18 +83,19 @@ function switchAccount(id){
   save(); shell();
 }
 function createNormalAccount(){
-  if(!state.user.isAdmin)return;
-  const name=(prompt("新しい通常アカウントの表示名")||"").trim();
+  const name=(prompt("新しい個人アカウントの表示名")||"").trim();
   if(!name)return;
   const username=(prompt("ユーザー名（英数字など）")||"").trim();
   if(!username)return;
   if(accounts.some(a=>a.username.toLowerCase()===username.toLowerCase())){
-    alert("そのユーザー名はすでに使われています。"); return;
+    alert("そのユーザー名はすでに使われています。別の名前にしてください。"); return;
   }
   const a={id:"acct_"+uid(),username,displayName:name,bio:"",status:"オンライン",avatar:"",isAdmin:false};
   accounts.push(a);
   state.users.push({id:a.id,username:a.username,displayName:a.displayName,bio:"",status:"オンライン",avatar:"",isAdmin:false});
-  saveAccounts(); save(); admin();
+  saveAccounts(); save();
+  // 個人アカウントは誰でも作成でき、作成後はそのアカウントへ切り替える。
+  switchAccount(a.id);
 }
 function accountSwitcherHTML(){
   const cur=state.activeAccountId || (state.user.isAdmin?"sora":null);
@@ -179,3 +180,4 @@ function settings(){content(`<div class="card narrow"><h2>⚙️ 設定</h2><lab
 function report(){const reason=prompt("通報理由");if(reason){state.reports.push({id:uid(),reason,resolved:false,createdAt:now()});state.notifications.push({id:uid(),title:"通報を受け付けました",body:"管理者が確認します。",read:false,createdAt:now()});save();updateBadge();alert("通報を送信しました")}}
 function content(html){document.getElementById("content").innerHTML=html}
 shell();
+view("home");
