@@ -45,6 +45,74 @@ function esc(s=""){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt
 function user(id){return state.users.find(x=>x.id===id)||{displayName:id,username:id}}
 function avatar(u){return u.avatar||"👤"}
 
+const ACCOUNT_KEY="luka_v4_accounts";
+let accounts=(()=>{try{return JSON.parse(localStorage.getItem(ACCOUNT_KEY)||"[]")}catch{return[]}})();
+
+function saveAccounts(){localStorage.setItem(ACCOUNT_KEY,JSON.stringify(accounts))}
+function ensureAccounts(){
+  if(!accounts.length){
+    accounts=[{id:"sora",username:"sora",displayName:"そら",bio:"",status:"オンライン",avatar:"",isAdmin:true}];
+  }
+  let sora=accounts.find(a=>a.id==="sora"||a.username==="sora"||a.displayName==="そら");
+  if(!sora){sora=accounts[0];sora.id="sora";sora.username="sora";sora.displayName="そら";}
+  accounts.forEach(a=>a.isAdmin=(a.id===sora.id));
+  if(!accounts.some(a=>a.id==="current")){
+    const u=state.user;
+    const isSora=u.username==="sora"||u.displayName==="そら";
+    if(isSora){
+      const sa=accounts.find(a=>a.id===sora.id);
+      Object.assign(sa,{username:"sora",displayName:"そら",bio:u.bio||"",status:u.status||"オンライン",avatar:u.avatar||""});
+    }
+  }
+  saveAccounts();
+}
+function syncCurrentAccount(){
+  const a=accounts.find(a=>a.id===state.activeAccountId) || accounts.find(a=>a.id==="sora");
+  if(!a)return;
+  Object.assign(a,{username:state.user.username,displayName:state.user.displayName,bio:state.user.bio||"",status:state.user.status||"",avatar:state.user.avatar||""});
+  saveAccounts();
+}
+function switchAccount(id){
+  syncCurrentAccount();
+  const a=accounts.find(x=>x.id===id); if(!a)return;
+  state.activeAccountId=a.id;
+  state.user={id:"me",username:a.username,displayName:a.displayName,bio:a.bio||"",status:a.status||"オンライン",avatar:a.avatar||"",isAdmin:!!a.isAdmin};
+  const me=state.users.find(u=>u.id==="me");
+  if(me)Object.assign(me,state.user);
+  else state.users.unshift({...state.user});
+  save(); shell();
+}
+function createNormalAccount(){
+  if(!state.user.isAdmin)return;
+  const name=(prompt("新しい通常アカウントの表示名")||"").trim();
+  if(!name)return;
+  const username=(prompt("ユーザー名（英数字など）")||"").trim();
+  if(!username)return;
+  if(accounts.some(a=>a.username.toLowerCase()===username.toLowerCase())){
+    alert("そのユーザー名はすでに使われています。"); return;
+  }
+  const a={id:"acct_"+uid(),username,displayName:name,bio:"",status:"オンライン",avatar:"",isAdmin:false};
+  accounts.push(a);
+  state.users.push({id:a.id,username:a.username,displayName:a.displayName,bio:"",status:"オンライン",avatar:"",isAdmin:false});
+  saveAccounts(); save(); admin();
+}
+function accountSwitcherHTML(){
+  const cur=state.activeAccountId || (state.user.isAdmin?"sora":null);
+  return `<div class="card"><h3>🔄 アカウント切替</h3>
+  <p class="muted">現在：${esc(state.user.displayName)}${state.user.isAdmin?" 👑 管理者":""}</p>
+  ${accounts.map(a=>`<div class="row"><span>${avatar(a)} <b>${esc(a.displayName)}</b> <small>@${esc(a.username)}</small>${a.isAdmin?" 👑":""}</span>
+  <button onclick="switchAccount('${a.id}')">${cur===a.id?"使用中":"切替"}</button></div>`).join("")}
+  </div>`;
+}
+ensureAccounts();
+if(!state.activeAccountId){
+  const a=accounts.find(x=>x.username===state.user.username)||accounts.find(x=>x.id==="sora")||accounts[0];
+  state.activeAccountId=a.id;
+  state.user={id:"me",username:a.username,displayName:a.displayName,bio:a.bio||"",status:a.status||"オンライン",avatar:a.avatar||"",isAdmin:!!a.isAdmin};
+  save();
+}
+saveAccounts();
+
 function shell(){
  document.getElementById("app").innerHTML=`
  <header><div class="brand">◈ <b>Luka</b><small>Local Complete</small></div>
@@ -79,7 +147,7 @@ function view(type){
  if(type==="settings") settings();
 }
 function home(){content(`<div class="hero card"><div class="heroIcon">◈</div><div><h1>Luka</h1><p>友達、スペース、DM、AI、通話まで。ひとつにつながるコミュニケーションツール。</p></div></div><div class="grid"><div class="card"><h3>最近の場所</h3><p>スペースを選ぶとルームを開けます。</p></div><div class="card"><h3>Luka公式</h3><p>使い方や困ったことを相談できます。</p><button onclick="dm('official')">Luka公式を開く</button></div></div>`)}
-function profile(){const u=state.user;content(`<div class="card narrow"><h2>👤 プロフィール</h2><div class="avatarBig">${avatar(u)}</div><label>表示名<input id="display" value="${esc(u.displayName)}"></label><label>アイコン（絵文字/URL）<input id="avatar" value="${esc(u.avatar)}"></label><label>ステータス<input id="status" value="${esc(u.status)}"></label><label>自己紹介<textarea id="bio">${esc(u.bio)}</textarea></label><button onclick="saveProfile()">保存</button></div>`)}
+function profile(){const u=state.user;content(`<div class="card narrow"><h2>👤 プロフィール</h2><div class="avatarBig">${avatar(u)}</div><label>表示名<input id="display" value="${esc(u.displayName)}"></label><label>アイコン（絵文字/URL）<input id="avatar" value="${esc(u.avatar)}"></label><label>ステータス<input id="status" value="${esc(u.status)}"></label><label>自己紹介<textarea id="bio">${esc(u.bio)}</textarea></label><button onclick="saveProfile()">保存</button></div>${accountSwitcherHTML()}`)}
 function saveProfile(){state.user.displayName=document.getElementById("display").value||state.user.username;state.user.avatar=document.getElementById("avatar").value;state.user.status=document.getElementById("status").value;state.user.bio=document.getElementById("bio").value;const me=state.users.find(x=>x.id==="me");Object.assign(me,state.user);save();shell()}
 function friends(){content(`<div class="card"><h2>👥 友達・ユーザー</h2><input id="search" placeholder="ユーザー名・表示名を検索" oninput="searchUsers()"><div id="userResults"></div><h3>友達</h3><div>${state.friends.map(id=>`<div class="row">${avatar(user(id))} ${esc(user(id).displayName)} <button onclick="dm('${id}')">DM</button></div>`).join("")||"まだ友達はいません。"}</div></div>`);searchUsers()}
 function searchUsers(){const q=(document.getElementById("search")?.value||"").toLowerCase();const a=state.users.filter(u=>u.id!=="me"&&(u.username.toLowerCase().includes(q)||(u.displayName||"").toLowerCase().includes(q)));const e=document.getElementById("userResults");if(e)e.innerHTML=a.map(u=>`<div class="row"><span>${avatar(u)} <b>${esc(u.displayName)}</b> <small>@${esc(u.username)}</small></span><span><button onclick="dm('${u.id}')">DM</button>${u.type?"":"<button onclick=\"addFriend('"+u.id+"')\">友達申請</button>"}</span></div>`).join("")||"見つかりませんでした。"}
@@ -101,7 +169,7 @@ function reply(mid){const v=prompt("返信内容");if(v){state.notifications.pus
 function roomSearch(sid,rid){const q=prompt("検索する文字");if(!q)return;const r=state.spaces.find(s=>s.id===sid).rooms.find(x=>x.id===rid);const a=r.messages.filter(m=>m.content.toLowerCase().includes(q.toLowerCase()));content(`<div class="card"><button onclick="room('${sid}','${rid}')">← ルームへ戻る</button><h2>🔎 検索結果</h2>${a.map(messageHTML).join("")||"見つかりませんでした。"}</div>`)}
 
 function createSpace(){const n=prompt("スペース名");if(!n)return;const s={id:uid(),name:n,owner:"me",inviteCode:Math.random().toString(36).slice(2,8).toUpperCase(),rooms:[{id:uid(),name:"ロビー",messages:[]}]};state.spaces.push(s);save();shell();space(s.id)}
-function admin(){if(!state.user.isAdmin)return content(`<div class="card"><h2>管理者</h2><p>管理者専用です。</p></div>`);content(`<div class="adminDash"><div class="card"><h2>👑 管理者ダッシュボード</h2><p class="muted">管理者モードではオンライン/入力中情報を表示しません。</p><div class="stats"><div><b>${state.users.length}</b><small>ユーザー</small></div><div><b>${state.spaces.length}</b><small>スペース</small></div><div><b>${state.spaces.reduce((n,s)=>n+s.rooms.length,0)}</b><small>ルーム</small></div><div><b>${totalMessages()}</b><small>メッセージ</small></div><div><b>${state.reports.filter(r=>!r.resolved).length}</b><small>未解決通報</small></div></div></div><div class="card"><h3>🌐 全スペース</h3>${state.spaces.map(s=>`<div class="adminSpace"><b>${esc(s.name)}</b><small>邀请码：${esc(s.inviteCode||"-")}</small><div>${s.rooms.map(r=>`<button onclick="adminRoom('${s.id}','${r.id}')">${esc(r.name)}</button>`).join("")}</div></div>`).join("")}</div><div class="card"><h3>👥 ユーザー管理</h3>${state.users.map(u=>`<div class="row">${avatar(u)} <span><b>${esc(u.displayName)}</b> <small>@${esc(u.username)}</small></span><span>${u.id==="me"?"👑 自分":`<button onclick="adminUser('${u.id}')">管理</button>`}</span></div>`).join("")}</div><div class="card"><h3>🚨 通報</h3>${state.reports.map(r=>`<div class="row"><span>${esc(r.reason)}</span><button onclick="resolveReport('${r.id}')">${r.resolved?"解決済":"解決"}</button></div>`).join("")||"通報はありません。"}</div><div class="card"><h3>🤖 Luka公式アカウント</h3><div class="row">${avatar(user("official"))} <span>Luka公式<br><small>一般ユーザー向けAIサポート</small></span><button onclick="dm('official')">開く</button></div><div class="row">${avatar(user("update"))} <span>Luka Update<br><small>アップデート専用</small></span></div><div class="row">${avatar(user("adminai"))} <span>Luka管理者<br><small>開発・設計用AI</small></span></div></div></div>`)}
+function admin(){if(!state.user.isAdmin)return content(`<div class="card"><h2>管理者</h2><p>管理者専用です。</p></div>`);content(`<div class="adminDash"><div class="card"><h2>👑 管理者ダッシュボード</h2><p class="muted">管理者モードではオンライン/入力中情報を表示しません。</p><div class="stats"><div><b>${state.users.length}</b><small>ユーザー</small></div><div><b>${state.spaces.length}</b><small>スペース</small></div><div><b>${state.spaces.reduce((n,s)=>n+s.rooms.length,0)}</b><small>ルーム</small></div><div><b>${totalMessages()}</b><small>メッセージ</small></div><div><b>${state.reports.filter(r=>!r.resolved).length}</b><small>未解決通報</small></div></div></div><div class="card"><h3>🌐 全スペース</h3>${state.spaces.map(s=>`<div class="adminSpace"><b>${esc(s.name)}</b><small>邀请码：${esc(s.inviteCode||"-")}</small><div>${s.rooms.map(r=>`<button onclick="adminRoom('${s.id}','${r.id}')">${esc(r.name)}</button>`).join("")}</div></div>`).join("")}</div><div class="card"><h3>👥 ユーザー管理</h3>${state.users.map(u=>`<div class="row">${avatar(u)} <span><b>${esc(u.displayName)}</b> <small>@${esc(u.username)}</small></span><span>${u.id==="me"?"👑 自分":`<button onclick="adminUser('${u.id}')">管理</button>`}</span></div>`).join("")}</div><div class="card"><h3>🚨 通報</h3>${state.reports.map(r=>`<div class="row"><span>${esc(r.reason)}</span><button onclick="resolveReport('${r.id}')">${r.resolved?"解決済":"解決"}</button></div>`).join("")||"通報はありません。"}</div><div class="card"><h3>🤖 Luka公式アカウント</h3><div class="row">${avatar(user("official"))} <span>Luka公式<br><small>一般ユーザー向けAIサポート</small></span><button onclick="dm('official')">開く</button></div><div class="row">${avatar(user("update"))} <span>Luka Update<br><small>アップデート専用</small></span></div><div class="row">${avatar(user("adminai"))} <span>Luka管理者<br><small>開発・設計用AI</small></span></div></div></div><div class="card"><h3>👤 アカウント管理</h3><p class="muted">「そら」が唯一の管理者です。通常アカウントをここから作成・切替できます。</p><button onclick="createNormalAccount()">＋ 通常アカウントを作成</button>${accountSwitcherHTML()}</div></div>`)}
 function totalMessages(){return state.spaces.reduce((n,s)=>n+s.rooms.reduce((x,r)=>x+r.messages.length,0),0)+state.dms.reduce((n,d)=>n+d.messages.length,0)}
 function adminRoom(sid,rid){const s=state.spaces.find(x=>x.id===sid),r=s.rooms.find(x=>x.id===rid);content(`<div class="card"><button onclick="admin()">← ダッシュボード</button><h2>${esc(s.name)} / ${esc(r.name)}</h2><p class="muted">管理者閲覧モード。オンライン/入力中情報はありません。</p><div class="messages">${r.messages.map(messageHTML).join("")||"履歴なし"}</div></div>`)}
 function adminUser(id){const u=user(id);const action=confirm(`${u.displayName} を利用停止状態にしますか？`);if(action){u.suspended=true;save();admin()}}
@@ -111,212 +179,3 @@ function settings(){content(`<div class="card narrow"><h2>⚙️ 設定</h2><lab
 function report(){const reason=prompt("通報理由");if(reason){state.reports.push({id:uid(),reason,resolved:false,createdAt:now()});state.notifications.push({id:uid(),title:"通報を受け付けました",body:"管理者が確認します。",read:false,createdAt:now()});save();updateBadge();alert("通報を送信しました")}}
 function content(html){document.getElementById("content").innerHTML=html}
 shell();
-
-
-/* =========================================================
-   Luka V4 Account Switch / Account Management
-   - そら is the only admin account
-   - Other accounts are normal accounts
-   - Account switching is available from Admin and Profile
-   - V4 prototype: browser localStorage only
-   ========================================================= */
-(function(){
-  const ACCOUNT_KEY = "luka_v4_accounts";
-  let accounts = [];
-  try { accounts = JSON.parse(localStorage.getItem(ACCOUNT_KEY) || "[]"); } catch(e) { accounts = []; }
-
-  function saveAccounts(){
-    localStorage.setItem(ACCOUNT_KEY, JSON.stringify(accounts));
-  }
-
-  function syncAccountFromCurrent(){
-    if(!state || !state.user) return;
-    const a = accounts.find(x => x.id === state.user.id || x.username === state.user.username);
-    if(a){
-      Object.assign(a, {
-        username: state.user.username,
-        name: state.user.name || state.user.username,
-        avatar: state.user.avatar || "",
-        isAdmin: a.username === "そら" || a.id === "sora"
-      });
-    }
-    const u = state.users && state.users.find(x => x.id === "me");
-    if(u) Object.assign(u, state.user);
-    saveAccounts();
-  }
-
-  function ensureAccounts(){
-    if(!accounts.length){
-      accounts = [{
-        id:"sora",
-        username:"そら",
-        name:"そら",
-        avatar:"",
-        isAdmin:true
-      }];
-    }
-
-    // Keep exactly one management account: そら.
-    let sora = accounts.find(x => x.username === "そら" || x.id === "sora");
-    if(!sora){
-      sora = accounts[0];
-      sora.username = "そら";
-      sora.name = "そら";
-      sora.id = "sora";
-    }
-    accounts.forEach(x => x.isAdmin = (x.id === sora.id));
-    saveAccounts();
-  }
-
-  function addUserProfile(a){
-    if(!state.users) state.users = [];
-    if(a.id !== "sora" && !state.users.some(u => u.id === a.id)){
-      state.users.push({
-        id:a.id, username:a.username, name:a.name,
-        avatar:a.avatar || "", isAdmin:false, online:false
-      });
-    }
-  }
-
-  function switchAccount(id){
-    syncAccountFromCurrent();
-    const target = accounts.find(x => x.id === id);
-    if(!target) return;
-    state.user = {
-      id: target.id === "sora" ? "me" : target.id,
-      username: target.username,
-      name: target.name,
-      avatar: target.avatar || "",
-      isAdmin: !!target.isAdmin
-    };
-    // Existing V4 code expects the current user to be "me".
-    state.users = (state.users || []).filter(u => u.id !== "me");
-    state.users.unshift({
-      id:"me", username:state.user.username, name:state.user.name,
-      avatar:state.user.avatar || "", isAdmin:state.user.isAdmin, online:true
-    });
-    localStorage.setItem("luka_v4_state", JSON.stringify(state));
-    shell();
-    view("home");
-  }
-
-  function createAccount(){
-    if(!state.user.isAdmin){
-      alert("管理者アカウントのみ作成できます。");
-      return;
-    }
-    const username = prompt("新しいアカウント名を入力してください");
-    if(!username) return;
-    const clean = username.trim();
-    if(!clean) return;
-    if(accounts.some(a => a.username === clean)){
-      alert("そのアカウントはすでに存在します。");
-      return;
-    }
-    const id = "acct_" + Date.now().toString(36);
-    const a = {id, username:clean, name:clean, avatar:"", isAdmin:false};
-    accounts.push(a);
-    addUserProfile(a);
-    saveAccounts();
-    localStorage.setItem("luka_v4_state", JSON.stringify(state));
-    alert("通常アカウント「" + clean + "」を作成しました。");
-    admin();
-  }
-
-  function accountSwitcher(){
-    const current = accounts.find(a =>
-      a.username === state.user.username || (state.user.isAdmin && a.id === "sora")
-    );
-    return `
-      <div class="card">
-        <h3>アカウント切替</h3>
-        <p class="muted">現在：${current ? current.name : state.user.name}</p>
-        <div class="list">
-          ${accounts.map(a => `
-            <div class="row">
-              <div>
-                <strong>${a.name}</strong>
-                <div class="muted">@${a.username}${a.isAdmin ? " 👑 管理者" : ""}</div>
-              </div>
-              <button class="btn" onclick="lukaSwitchAccount('${a.id}')">
-                ${current && current.id === a.id ? "使用中" : "切替"}
-              </button>
-            </div>
-          `).join("")}
-        </div>
-      </div>`;
-  }
-
-  window.lukaSwitchAccount = switchAccount;
-  window.lukaCreateAccount = createAccount;
-
-  ensureAccounts();
-
-  // Make the current V4 "sora/そら" account the sole admin without
-  // creating a second admin account.
-  if(state && state.user){
-    const currentIsSora = state.user.username === "そら" || state.user.username === "sora";
-    if(currentIsSora){
-      state.user.username = "そら";
-      state.user.name = "そら";
-      state.user.isAdmin = true;
-      if(!accounts.some(a => a.id === "sora")){
-        accounts.push({id:"sora",username:"そら",name:"そら",avatar:state.user.avatar||"",isAdmin:true});
-      }
-    }
-  }
-  ensureAccounts();
-  saveAccounts();
-
-  // Wrap the existing profile/admin views.
-  const baseProfile = window.profile;
-  const baseAdmin = window.admin;
-
-  window.profile = function(){
-    baseProfile();
-    setTimeout(() => {
-      const host = document.querySelector("#profileAccountSwitcher");
-      if(host) host.innerHTML = accountSwitcher();
-    }, 0);
-  };
-
-  window.admin = function(){
-    baseAdmin();
-    setTimeout(() => {
-      const root = document.querySelector("#app");
-      if(!root) return;
-      const marker = document.querySelector("#lukaAccountPanel");
-      if(marker) return;
-
-      const panel = document.createElement("div");
-      panel.id = "lukaAccountPanel";
-      panel.innerHTML = `
-        <div class="card" style="margin-top:16px">
-          <h3>アカウント管理</h3>
-          <p class="muted">「そら」が唯一の管理者です。ここから通常アカウントを作成・切替できます。</p>
-          <button class="btn primary" onclick="lukaCreateAccount()">＋ 通常アカウントを作成</button>
-          <div style="margin-top:12px">${accountSwitcher()}</div>
-        </div>`;
-      root.appendChild(panel);
-    }, 0);
-  };
-
-  // Ensure the profile view has a mount point if the base profile supports it.
-  // If it doesn't, append the account panel directly after rendering.
-  const observer = new MutationObserver(() => {
-    const app = document.querySelector("#app");
-    if(!app) return;
-    if(document.querySelector("#profileAccountSwitcher")) return;
-    if(document.body && app.innerText.includes("プロフィール")){
-      const cards = app.querySelectorAll(".card");
-      const last = cards[cards.length-1];
-      if(last && !document.querySelector("#lukaProfileAccountPanel")){
-        const panel = document.createElement("div");
-        panel.id = "lukaProfileAccountPanel";
-        panel.innerHTML = accountSwitcher();
-        last.parentNode.appendChild(panel);
-      }
-    }
-  });
-  observer.observe(document.body, {childList:true, subtree:true});
-})();
