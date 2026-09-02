@@ -46,9 +46,11 @@ function user(id){return state.users.find(x=>x.id===id)||{displayName:id,usernam
 function avatar(u){return u.avatar||"👤"}
 
 const ACCOUNT_KEY="luka_v4_accounts";
+const DEVICE_KEY="luka_v4_device_registration";
 let accounts=(()=>{try{return JSON.parse(localStorage.getItem(ACCOUNT_KEY)||"[]")}catch{return[]}})();
-
+let deviceRegistration=(()=>{try{return JSON.parse(localStorage.getItem(DEVICE_KEY)||"null")}catch{return null}})();
 function saveAccounts(){localStorage.setItem(ACCOUNT_KEY,JSON.stringify(accounts))}
+function saveDeviceRegistration(){localStorage.setItem(DEVICE_KEY,JSON.stringify(deviceRegistration))}
 function ensureAccounts(){
   if(!accounts.length){
     accounts=[{id:"sora",username:"sora",displayName:"そら",bio:"",status:"オンライン",avatar:"",isAdmin:true}];
@@ -56,13 +58,9 @@ function ensureAccounts(){
   let sora=accounts.find(a=>a.id==="sora"||a.username==="sora"||a.displayName==="そら");
   if(!sora){sora=accounts[0];sora.id="sora";sora.username="sora";sora.displayName="そら";}
   accounts.forEach(a=>a.isAdmin=(a.id===sora.id));
-  if(!accounts.some(a=>a.id==="current")){
-    const u=state.user;
-    const isSora=u.username==="sora"||u.displayName==="そら";
-    if(isSora){
-      const sa=accounts.find(a=>a.id===sora.id);
-      Object.assign(sa,{username:"sora",displayName:"そら",bio:u.bio||"",status:u.status||"オンライン",avatar:u.avatar||""});
-    }
+  const u=state.user;
+  if(u && (u.username==="sora"||u.displayName==="そら")){
+    Object.assign(sora,{username:"sora",displayName:"そら",bio:u.bio||"",status:u.status||"オンライン",avatar:u.avatar||"",isAdmin:true});
   }
   saveAccounts();
 }
@@ -72,37 +70,46 @@ function syncCurrentAccount(){
   Object.assign(a,{username:state.user.username,displayName:state.user.displayName,bio:state.user.bio||"",status:state.user.status||"",avatar:state.user.avatar||""});
   saveAccounts();
 }
+function normalAccountExists(){return accounts.some(a=>!a.isAdmin)}
+function canCreatePersonalAccount(){
+  // Admin is exempt. Normal users get one account per browser/device profile.
+  return !!state.user.isAdmin || !deviceRegistration || !normalAccountExists();
+}
+function createPersonalAccount(){
+  if(!canCreatePersonalAccount()){
+    alert("この端末ではすでに個人アカウントが作成されています。通常ユーザーは1台につき1アカウントです。\n\n※V4はブラウザ版のため、ブラウザデータを消すとこの制限を解除できてしまいます。正式版ではサーバー側で端末・アカウント制限を行います。");
+    return;
+  }
+  const name=(prompt("表示名を入力してください")||"").trim(); if(!name)return;
+  const username=(prompt("ユーザー名（英数字など）")||"").trim(); if(!username)return;
+  if(accounts.some(a=>a.username.toLowerCase()===username.toLowerCase())){alert("そのユーザー名はすでに使われています。");return;}
+  const a={id:"acct_"+uid(),username,displayName:name,bio:"",status:"オンライン",avatar:"",isAdmin:false};
+  accounts.push(a);
+  state.users.push({id:a.id,username:a.username,displayName:a.displayName,bio:"",status:"オンライン",avatar:"",isAdmin:false});
+  deviceRegistration={accountId:a.id,registeredAt:now()};
+  saveAccounts(); saveDeviceRegistration(); save();
+  switchAccount(a.id);
+}
 function switchAccount(id){
   syncCurrentAccount();
   const a=accounts.find(x=>x.id===id); if(!a)return;
   state.activeAccountId=a.id;
   state.user={id:"me",username:a.username,displayName:a.displayName,bio:a.bio||"",status:a.status||"オンライン",avatar:a.avatar||"",isAdmin:!!a.isAdmin};
   const me=state.users.find(u=>u.id==="me");
-  if(me)Object.assign(me,state.user);
-  else state.users.unshift({...state.user});
+  if(me)Object.assign(me,state.user); else state.users.unshift({...state.user});
   save(); shell();
 }
 function createNormalAccount(){
-  const name=(prompt("新しい個人アカウントの表示名")||"").trim();
-  if(!name)return;
-  const username=(prompt("ユーザー名（英数字など）")||"").trim();
-  if(!username)return;
-  if(accounts.some(a=>a.username.toLowerCase()===username.toLowerCase())){
-    alert("そのユーザー名はすでに使われています。別の名前にしてください。"); return;
-  }
-  const a={id:"acct_"+uid(),username,displayName:name,bio:"",status:"オンライン",avatar:"",isAdmin:false};
-  accounts.push(a);
-  state.users.push({id:a.id,username:a.username,displayName:a.displayName,bio:"",status:"オンライン",avatar:"",isAdmin:false});
-  saveAccounts(); save();
-  // 個人アカウントは誰でも作成でき、作成後はそのアカウントへ切り替える。
-  switchAccount(a.id);
+  if(!state.user.isAdmin){createPersonalAccount();return;}
+  createPersonalAccount();
 }
 function accountSwitcherHTML(){
   const cur=state.activeAccountId || (state.user.isAdmin?"sora":null);
   return `<div class="card"><h3>🔄 アカウント切替</h3>
   <p class="muted">現在：${esc(state.user.displayName)}${state.user.isAdmin?" 👑 管理者":""}</p>
-  ${accounts.map(a=>`<div class="row"><span>${avatar(a)} <b>${esc(a.displayName)}</b> <small>@${esc(a.username)}</small>${a.isAdmin?" 👑":""}</span>
+  ${accounts.map(a=>`<div class="row"><span>${avatar(a)} <b>${esc(a.displayName)}</b> <small>@${esc(a.username)}</small>${a.isAdmin?" 👑": ""}</span>
   <button onclick="switchAccount('${a.id}')">${cur===a.id?"使用中":"切替"}</button></div>`).join("")}
+  ${state.user.isAdmin?`<button onclick="createPersonalAccount()">＋ 通常アカウントを作成</button>`:""}
   </div>`;
 }
 ensureAccounts();
@@ -111,6 +118,12 @@ if(!state.activeAccountId){
   state.activeAccountId=a.id;
   state.user={id:"me",username:a.username,displayName:a.displayName,bio:a.bio||"",status:a.status||"オンライン",avatar:a.avatar||"",isAdmin:!!a.isAdmin};
   save();
+}
+// Existing V4 users may already have a normal account. Register that account as the device's one normal account.
+if(!deviceRegistration){
+  const existingNormal=accounts.find(a=>!a.isAdmin);
+  if(existingNormal) deviceRegistration={accountId:existingNormal.id,registeredAt:now()};
+  saveDeviceRegistration();
 }
 saveAccounts();
 
@@ -148,7 +161,7 @@ function view(type){
  if(type==="settings") settings();
 }
 function home(){content(`<div class="hero card"><div class="heroIcon">◈</div><div><h1>Luka</h1><p>友達、スペース、DM、AI、通話まで。ひとつにつながるコミュニケーションツール。</p></div></div><div class="grid"><div class="card"><h3>最近の場所</h3><p>スペースを選ぶとルームを開けます。</p></div><div class="card"><h3>Luka公式</h3><p>使い方や困ったことを相談できます。</p><button onclick="dm('official')">Luka公式を開く</button></div></div>`)}
-function profile(){const u=state.user;content(`<div class="card narrow"><h2>👤 プロフィール</h2><div class="avatarBig">${avatar(u)}</div><label>表示名<input id="display" value="${esc(u.displayName)}"></label><label>アイコン（絵文字/URL）<input id="avatar" value="${esc(u.avatar)}"></label><label>ステータス<input id="status" value="${esc(u.status)}"></label><label>自己紹介<textarea id="bio">${esc(u.bio)}</textarea></label><button onclick="saveProfile()">保存</button></div>${accountSwitcherHTML()}`)}
+function profile(){const u=state.user;content(`<div class="card narrow"><h2>👤 プロフィール</h2><div class="avatarBig">${avatar(u)}</div><label>表示名<input id="display" value="${esc(u.displayName)}"></label><label>アイコン（絵文字/URL）<input id="avatar" value="${esc(u.avatar)}"></label><label>ステータス<input id="status" value="${esc(u.status)}"></label><label>自己紹介<textarea id="bio">${esc(u.bio)}</textarea></label><button onclick="saveProfile()">保存</button></div>${!u.isAdmin && !normalAccountExists()?`<div class="card"><h3>👤 個人アカウント</h3><p class="muted">この端末では個人アカウントを1つだけ作成できます。</p><button onclick="createPersonalAccount()">＋ 個人アカウントを作成</button></div>`:""}${accountSwitcherHTML()}`)}
 function saveProfile(){state.user.displayName=document.getElementById("display").value||state.user.username;state.user.avatar=document.getElementById("avatar").value;state.user.status=document.getElementById("status").value;state.user.bio=document.getElementById("bio").value;const me=state.users.find(x=>x.id==="me");Object.assign(me,state.user);save();shell()}
 function friends(){content(`<div class="card"><h2>👥 友達・ユーザー</h2><input id="search" placeholder="ユーザー名・表示名を検索" oninput="searchUsers()"><div id="userResults"></div><h3>友達</h3><div>${state.friends.map(id=>`<div class="row">${avatar(user(id))} ${esc(user(id).displayName)} <button onclick="dm('${id}')">DM</button></div>`).join("")||"まだ友達はいません。"}</div></div>`);searchUsers()}
 function searchUsers(){const q=(document.getElementById("search")?.value||"").toLowerCase();const a=state.users.filter(u=>u.id!=="me"&&(u.username.toLowerCase().includes(q)||(u.displayName||"").toLowerCase().includes(q)));const e=document.getElementById("userResults");if(e)e.innerHTML=a.map(u=>`<div class="row"><span>${avatar(u)} <b>${esc(u.displayName)}</b> <small>@${esc(u.username)}</small></span><span><button onclick="dm('${u.id}')">DM</button>${u.type?"":"<button onclick=\"addFriend('"+u.id+"')\">友達申請</button>"}</span></div>`).join("")||"見つかりませんでした。"}
@@ -180,4 +193,3 @@ function settings(){content(`<div class="card narrow"><h2>⚙️ 設定</h2><lab
 function report(){const reason=prompt("通報理由");if(reason){state.reports.push({id:uid(),reason,resolved:false,createdAt:now()});state.notifications.push({id:uid(),title:"通報を受け付けました",body:"管理者が確認します。",read:false,createdAt:now()});save();updateBadge();alert("通報を送信しました")}}
 function content(html){document.getElementById("content").innerHTML=html}
 shell();
-view("home");
