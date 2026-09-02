@@ -39,3 +39,25 @@ AI APIが未設定・一時的に失敗した場合は、既存のローカル�
 これはまだ本番公開の完成版ではありません。
 認証・レート制限・DB・永続ファイル保存などは次段階で強化します。
 AI利用にはAPI料金が発生する場合があるため、公開前に利用上限や安全対策を追加してください。
+
+
+## Luka公式AIが「動かない」場合
+V5.1以降のAIは、OpenAI APIキーがサーバー側に設定されている場合だけ本物のAIを呼び出します。
+
+Render:
+`Luka → Environment → Add Environment Variable`
+
+- Key: `OPENAI_API_KEY`
+- Value: 自分のOpenAI APIキー
+
+任意:
+- Key: `LUKA_AI_MODEL`
+- Value: `gpt-5-mini` など、アカウントで利用可能なモデル
+
+保存後に再デプロイしてください。
+APIキーはGitHubへ絶対にコミットしないでください。
+
+`/api/luka-ai/status` を開くと `configured: true/false` でAIキーの設定状態だけ確認できます（キー自体は表示しません）。
+
+### ロビー
+「ロビー」はシステム用の基本部屋として削除不可です。その他の部屋だけ、権限がある場合に削除できます。

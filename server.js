@@ -65,6 +65,10 @@ function makeOpenAI(){
   return new OpenAI({apiKey:process.env.OPENAI_API_KEY});
 }
 
+app.get("/api/luka-ai/status",(req,res)=>{
+  res.json({ok:true,configured:!!process.env.OPENAI_API_KEY,model:process.env.LUKA_AI_MODEL||"gpt-5-mini"});
+});
+
 app.post("/api/luka-ai",async(req,res)=>{
   try{
     const message=String(req.body?.message||"").trim();

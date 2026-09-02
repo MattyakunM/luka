@@ -253,7 +253,7 @@ function dmPage(){
   const target=window.currentDM||"luka_official";window.currentDM=target;
   const a=acct(target), d=ensureDM(me().id,target), msgs=dmMessages(d.id);
   return `<div class="card" style="padding:0;overflow:hidden"><div class="chat"><div class="chatrooms"><b>DM</b><div class="list" style="margin-top:10px">${state.accounts.filter(a=>a.id!==me().id).map(x=>`<button class="nav ${x.id===target?"active":""}" onclick="openDM('${x.id}')">${esc(x.name)}</button>`).join("")}</div></div>
-  <div class="messages"><div class="message-list" id="messageList">${msgs.map(renderMessage).join("")}</div><div class="composer"><textarea id="dmText" placeholder="${a.type==="ai"?"Luka公式にメッセージ":"メッセージを入力"}" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDMFromBox()}"></textarea><button class="primary" onclick="sendDMFromBox()">送信</button></div></div></div></div>`;
+  <div class="messages"><div class="message-list" id="messageList">${target==="luka_official"?`<div class="muted" style="padding:8px">🤖 Luka公式：サーバーのAI接続を使用します</div>`:""}${msgs.map(renderMessage).join("")}</div><div class="composer"><textarea id="dmText" placeholder="${a.type==="ai"?"Luka公式にメッセージ":"メッセージを入力"}" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDMFromBox()}"></textarea><button class="primary" onclick="sendDMFromBox()">送信</button></div></div></div></div>`;
 }
 function sendDMFromBox(){const el=document.getElementById("dmText");const t=el.value.trim();if(!t)return;sendDM(t)}
 
@@ -263,7 +263,7 @@ function spacesPage(){
   const s=spaceObj(),r=roomObj(),msgs=state.messages.filter(m=>m.kind==="room"&&m.spaceId===s?.id&&m.roomId===r?.id).sort((a,b)=>a.createdAt-b.createdAt);
   const spaces=state.spaces.map(x=>`<button class="${x.id===s?.id?"primary":""}" onclick="selectSpace('${x.id}')">${esc(x.name)}</button>`).join("");
   const rooms=s?s.rooms.map(x=>`<button class="${x.id===r?.id?"primary":""}" onclick="selectRoom('${x.id}')">${esc(x.name)}</button>`).join(""):"";
-  const body=s?`<div class="card"><div class="row" style="justify-content:space-between"><b>${esc(s.name)} / ${esc(r?.name||"")}</b><div><button onclick="createRoom()">＋部屋</button>${isAdmin()||s.owner===me().id?`<button class="danger" onclick="deleteSpace('${s.id}')">スペース削除</button>`:""}</div></div><div class="row" style="margin-top:10px">${rooms}</div></div><div class="card" style="padding:0;overflow:hidden"><div class="messages"><div class="message-list">${msgs.map(renderMessage).join("")}</div><div class="composer"><textarea id="roomText" placeholder="メッセージを入力" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendRoomFromBox()}"></textarea><button class="primary" onclick="sendRoomFromBox()">送信</button></div></div></div>`:"";
+  const body=s?`<div class="card"><div class="row" style="justify-content:space-between"><b>${esc(s.name)} / ${esc(r?.name||"")}</b><div><button onclick="createRoom()">＋部屋</button>${isAdmin()||s.owner===me().id?`<button class="danger" onclick="deleteSpace('${s.id}')">スペース削除</button>`:""}</div></div><div class="row" style="margin-top:10px">${rooms}${r&&r.name!=="ロビー"&&(isAdmin()||s.owner===me().id)?`<button class="danger" onclick="deleteRoom('${s.id}','${r.id}')">部屋を削除</button>`:""}</div></div><div class="card" style="padding:0;overflow:hidden"><div class="messages"><div class="message-list">${msgs.map(renderMessage).join("")}</div><div class="composer"><textarea id="roomText" placeholder="メッセージを入力" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendRoomFromBox()}"></textarea><button class="primary" onclick="sendRoomFromBox()">送信</button></div></div></div>`:"";
   return `<div class="row" style="justify-content:space-between"><h2>スペース</h2><button class="primary" onclick="createSpace()">＋スペース</button></div><div class="card"><div class="row">${spaces}</div></div>${body}`;
 }
 function selectSpace(id){state.activeSpace=id;const s=spaceObj();state.activeRoom=s?.rooms[0]?.id;save();render()}
@@ -280,6 +280,18 @@ function createRoom(){
   });
 }
 function deleteSpace(id){if(!confirm("このスペースを削除しますか？"))return;const s=state.spaces.find(x=>x.id===id);if(!s)return;if(!(isAdmin()||s.owner===me().id)){toast("権限がありません");return}state.spaces=state.spaces.filter(x=>x.id!==id);state.activeSpace=state.spaces[0]?.id;state.activeRoom=state.spaces[0]?.rooms[0]?.id;save();render()}
+function deleteRoom(sid,rid){
+  const s=state.spaces.find(x=>x.id===sid);
+  if(!s || !(isAdmin()||s.owner===me().id)){toast("権限がありません");return}
+  const r=s.rooms.find(x=>x.id===rid);
+  if(!r){toast("部屋がありません");return}
+  if(r.name==="ロビー"){toast("ロビーは削除できません");return}
+  if(!confirm(`「${r.name}」を削除しますか？`))return;
+  s.rooms=s.rooms.filter(x=>x.id!==rid);
+  state.activeRoom=s.rooms[0]?.id;
+  save();render();
+}
+
 function sendRoomFromBox(){const el=document.getElementById("roomText"),t=el.value.trim();if(!t)return;const s=spaceObj(),r=roomObj();state.messages.push({id:uid("m"),kind:"room",spaceId:s.id,roomId:r.id,author:me().id,text:t,createdAt:Date.now(),edited:false,deleted:false,reactions:{}});save();render()}
 
 function renderMessage(m){
@@ -345,7 +357,7 @@ function resetLocal(){if(!confirm("このブラウザのLukaデータを初期�
 
 window.view=view;window.closeModal=closeModal;window.accountSwitch=accountSwitch;window.openDM=openDM;
 window.sendDMFromBox=sendDMFromBox;window.saveProfile=saveProfile;window.sendFriend=sendFriend;window.acceptFriend=acceptFriend;window.rejectFriend=rejectFriend;
-window.selectSpace=selectSpace;window.selectRoom=selectRoom;window.createSpace=createSpace;window.createRoom=createRoom;window.deleteSpace=deleteSpace;window.sendRoomFromBox=sendRoomFromBox;
+window.selectSpace=selectSpace;window.selectRoom=selectRoom;window.createSpace=createSpace;window.createRoom=createRoom;window.deleteSpace=deleteSpace;window.deleteRoom=deleteRoom;window.sendRoomFromBox=sendRoomFromBox;
 window.react=react;window.togglePin=togglePin;window.editMessage=editMessage;window.deleteMessage=deleteMessage;window.replyTo=replyTo;
 window.createAccount=createAccount;window.switchAccount=switchAccount;window.toggleSuspend=toggleSuspend;window.adminOpenRoom=adminOpenRoom;window.resolveReport=resolveReport;window.reportUser=reportUser;
 window.saveSettings=saveSettings;window.exportBackup=exportBackup;window.importBackup=importBackup;window.resetLocal=resetLocal;
