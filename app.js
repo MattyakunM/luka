@@ -60,7 +60,7 @@ function shell(){
   <button class="newspace" onclick="createSpace()">＋ スペースを作成</button>
   <hr>
   <button class="nav" onclick="view('call')">📞 通話</button>
-${state.user.isAdmin ? "<button class=\"nav admin\" onclick=\"view('admin')\">👑 管理者</button>" : ""}
+  ${state.user.isAdmin?'<button class="nav admin" onclick="view(\\'admin\\')">👑 管理者</button>':''}
   <button class="nav" onclick="view('settings')">⚙️ 設定</button>
  </aside><section id="content"></section></main>`;
  renderSpaces(); updateBadge(); view("home");
@@ -113,68 +113,158 @@ function content(html){document.getElementById("content").innerHTML=html}
 shell();
 
 
-/* ===== Luka V4 Completion Patch =====
-   Adds robust local demo data, export/import backup, settings persistence,
-   message utilities, unread tracking, and graceful API fallback.
+/* ===== Luka V4 Account System (integrated) =====
+   そら = the only admin. Other created accounts are normal users.
+   Local V4: accounts are stored in localStorage.
 */
-(() => {
-  const LKEY = "luka_v4_state";
-  const getState = () => {
-    try { return JSON.parse(localStorage.getItem(LKEY) || "{}"); } catch { return {}; }
+(function(){
+  const ACCOUNT_KEY = "luka_v4_accounts";
+  const readAccounts = () => {
+    try { return JSON.parse(localStorage.getItem(ACCOUNT_KEY) || "null"); } catch { return null; }
   };
-  const saveState = (s) => localStorage.setItem(LKEY, JSON.stringify(s));
+  const writeAccounts = a => localStorage.setItem(ACCOUNT_KEY, JSON.stringify(a));
 
-  let s = getState();
-  s.settings ||= { notifications:true, compact:false, enterToSend:true };
-  s.unread ||= {};
-  s.drafts ||= {};
-  s.blocked ||= [];
-  s.pinned ||= {};
-  s.reactions ||= {};
-  saveState(s);
+  let accounts = readAccounts();
+  if(!Array.isArray(accounts) || !accounts.length){
+    accounts = [{id:"sora",username:"sora",displayName:"そら",bio:"",status:"オンライン",avatar:"",isAdmin:true}];
+  }
 
-  // Global helpers intentionally do not replace existing app functions.
-  window.LukaV4 = {
-    state: () => getState(),
-    save: saveState,
-    setSetting(key,val) {
-      const x=getState(); x.settings ||= {}; x.settings[key]=val; saveState(x);
-    },
-    exportBackup() {
-      const data = JSON.stringify(getState(), null, 2);
-      const blob = new Blob([data], {type:"application/json"});
-      const a=document.createElement("a");
-      a.href=URL.createObjectURL(blob);
-      a.download="luka-v4-backup.json";
-      a.click();
-      setTimeout(()=>URL.revokeObjectURL(a.href),500);
-    },
-    importBackup(file) {
-      return new Promise((resolve,reject)=>{
-        const r=new FileReader();
-        r.onload=()=>{
-          try {
-            const x=JSON.parse(r.result);
-            if(!x || typeof x!=="object") throw new Error("invalid");
-            saveState(x); resolve(true);
-          } catch(e){ reject(e); }
-        };
-        r.onerror=reject;
-        r.readAsText(file);
-      });
-    }
+  // Legacy V4 -> account store migration. Keep existing そら data.
+  state.accounts = accounts;
+  if(!state.activeAccountId) state.activeAccountId = "sora";
+
+  // そら is the sole administrator. Never grant admin to newly created accounts.
+  let sora = state.accounts.find(a => a.username === "sora" || a.id === "sora");
+  if(!sora){
+    sora = {id:"sora",username:"sora",displayName:"そら",bio:"",status:"オンライン",avatar:"",isAdmin:true};
+    state.accounts.unshift(sora);
+  }
+  state.accounts.forEach(a => a.isAdmin = (a.id === sora.id));
+
+  const syncCurrent = () => {
+    const a = state.accounts.find(x => x.id === state.activeAccountId);
+    if(!a || !state.user) return;
+    Object.assign(a, {
+      username: state.user.username,
+      displayName: state.user.displayName,
+      bio: state.user.bio || "",
+      status: state.user.status || "",
+      avatar: state.user.avatar || "",
+      isAdmin: a.id === sora.id
+    });
+    writeAccounts(state.accounts);
   };
 
-  // Add keyboard-friendly global command: Ctrl/Cmd+Shift+E = backup.
-  window.addEventListener("keydown", e=>{
-    if((e.ctrlKey||e.metaKey) && e.shiftKey && e.key.toLowerCase()==="e"){
-      e.preventDefault(); window.LukaV4.exportBackup();
-    }
-  });
+  const loadAccount = id => {
+    const a = state.accounts.find(x => x.id === id);
+    if(!a) return false;
+    state.activeAccountId = id;
+    state.user = {
+      id:"me", username:a.username, displayName:a.displayName,
+      bio:a.bio || "", status:a.status || "オンライン", avatar:a.avatar || "",
+      isAdmin:a.id === sora.id
+    };
+    state.users ||= [];
+    const me = state.users.find(x => x.id === "me");
+    if(me) Object.assign(me, state.user);
+    else state.users.unshift({...state.user});
+    save();
+    return true;
+  };
 
-  // Keep a tiny local "last seen" marker without exposing it as presence.
-  localStorage.setItem("luka_v4_last_seen", String(Date.now()));
+  // Preserve the currently stored そら profile when possible.
+  const current = state.accounts.find(x => x.id === state.activeAccountId);
+  if(current && state.user){
+    Object.assign(current, {
+      username: state.user.username || current.username,
+      displayName: state.user.displayName || current.displayName,
+      bio: state.user.bio || current.bio || "",
+      status: state.user.status || current.status || "オンライン",
+      avatar: state.user.avatar || current.avatar || ""
+    });
+  }
+  state.user.isAdmin = state.activeAccountId === sora.id;
+  writeAccounts(state.accounts);
+  save();
 
-  // Mark the app as V4-complete for diagnostics.
-  window.LUKA_V4_COMPLETE = true;
+  window.LukaAccounts = {
+    list(){ return state.accounts.slice(); },
+    create(username, displayName){
+      username = (username || "").trim();
+      displayName = (displayName || username).trim();
+      if(!username) throw new Error("ユーザー名を入力してください");
+      if(state.accounts.some(a => a.username.toLowerCase() === username.toLowerCase()))
+        throw new Error("そのユーザー名はすでに使われています");
+      const a = {id:"acct_"+uid(),username,displayName,bio:"",status:"オンライン",avatar:"",isAdmin:false};
+      state.accounts.push(a);
+      writeAccounts(state.accounts); save();
+      return a;
+    },
+    switchTo(id){
+      syncCurrent();
+      if(!loadAccount(id)) throw new Error("アカウントが見つかりません");
+      shell();
+      return true;
+    },
+    current(){ return state.activeAccountId; }
+  };
+
+  // Account-aware lookup for the currently active account.
+  const legacyUser = user;
+  user = function(id){ return id === "me" ? state.user : legacyUser(id); };
+
+  // Profile: everyone can switch between locally created accounts; only admin can create.
+  const legacyProfile = profile;
+  profile = function(){
+    legacyProfile();
+    const box = document.getElementById("content");
+    if(!box) return;
+    const rows = state.accounts.map(a => `
+      <div class="row">
+        <span>${a.isAdmin?"👑":"👤"} <b>${esc(a.displayName)}</b> <small>@${esc(a.username)}</small></span>
+        <span>${a.id===state.activeAccountId ? "<b>使用中</b>" : `<button onclick="LukaAccounts.switchTo('${a.id}')">切り替え</button>`}</span>
+      </div>`).join("");
+    box.insertAdjacentHTML("beforeend", `<div class="card">
+      <h3>🔄 アカウント切り替え</h3>
+      <p class="muted">このブラウザに保存されているアカウントを切り替えます。</p>
+      ${rows}
+    </div>`);
+  };
+
+  // Admin: account creation + switching in one place.
+  const legacyAdmin = admin;
+  admin = function(){
+    if(!state.user.isAdmin) return legacyAdmin();
+    legacyAdmin();
+    const box = document.getElementById("content");
+    if(!box) return;
+    const rows = state.accounts.map(a => `
+      <div class="row">
+        <span>${a.isAdmin?"👑":"👤"} <b>${esc(a.displayName)}</b> <small>@${esc(a.username)}</small></span>
+        <span>${a.id===state.activeAccountId ? "<b>使用中</b>" : `<button onclick="LukaAccounts.switchTo('${a.id}')">このアカウントに切替</button>`}</span>
+      </div>`).join("");
+    box.insertAdjacentHTML("afterbegin", `<div class="card">
+      <h3>🔄 アカウント管理</h3>
+      <p class="muted">管理者は「そら」だけです。ここから一般アカウントを作成・切り替えできます。</p>
+      ${rows}
+      <hr>
+      <h4>＋ 一般アカウントを作成</h4>
+      <label>ユーザー名<input id="newAcctUsername" placeholder="例：sample_user"></label>
+      <label>表示名<input id="newAcctDisplay" placeholder="例：サンプルユーザー"></label>
+      <button onclick="createLukaAccount()">アカウントを作成</button>
+    </div>`);
+  };
+
+  window.createLukaAccount = function(){
+    try{
+      const u = document.getElementById("newAcctUsername")?.value || "";
+      const d = document.getElementById("newAcctDisplay")?.value || "";
+      const a = LukaAccounts.create(u,d);
+      alert(`「${a.displayName}」を作成しました！`);
+      admin();
+    }catch(e){ alert(e.message || "作成できませんでした"); }
+  };
+
+  // Render the admin screen once after the base app has initialized.
+  setTimeout(() => { if(state.user.isAdmin) admin(); }, 0);
 })();
