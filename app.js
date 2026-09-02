@@ -157,7 +157,7 @@ async function requestLukaAI(text,dmId){
     console.error("Luka AI:",e);
     addNotification(me().id,`Luka AIに接続できませんでした：${e.message}`,"ai_error");
     save();render();
-    toast("Luka AIに接続できません。管理者設定を確認してください");
+    toast(e.message || "Luka AIに接続できませんでした");
   }
 }
 
@@ -326,6 +326,18 @@ function postUpdate(){
     state.accounts.filter(a=>a.id!=="sora"&&!a.suspended).forEach(a=>addNotification(a.id,"Luka Updateに新しい更新情報があります","update"));
     save();closeModal();toast("Luka Updateを投稿しました");render();
   });
+}
+
+async function checkLukaAIStatus(){
+  try{
+    const r=await fetch("/api/luka-ai/status",{cache:"no-store"});
+    const d=await r.json();
+    if(!r.ok) throw new Error(`AI状態確認エラー (${r.status})`);
+    toast(d.configured ? `Luka AI 接続設定OK（${d.model}）` : "Luka AIのAPIキーが未設定です");
+  }catch(e){
+    toast("Luka AI状態確認に失敗：サーバー側のV5.1.2が反映されているか確認してください");
+    console.error(e);
+  }
 }
 
 function adminPage(){

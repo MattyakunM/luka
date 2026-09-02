@@ -66,7 +66,18 @@ function makeOpenAI(){
 }
 
 app.get("/api/luka-ai/status",(req,res)=>{
-  res.json({ok:true,configured:!!process.env.OPENAI_API_KEY,model:process.env.LUKA_AI_MODEL||"gpt-5-mini"});
+  const configured=Boolean(process.env.OPENAI_API_KEY && String(process.env.OPENAI_API_KEY).trim());
+  res.json({
+    ok:true,
+    service:"Luka AI",
+    configured,
+    model:process.env.LUKA_AI_MODEL||"gpt-5-mini",
+    serverVersion:"5.1.2"
+  });
+});
+
+app.get("/api/luka-ai/test",(req,res)=>{
+  res.json({ok:true,service:"Luka AI endpoint",message:"AI endpoint is reachable",configured:Boolean(process.env.OPENAI_API_KEY && String(process.env.OPENAI_API_KEY).trim())});
 });
 
 app.post("/api/luka-ai",async(req,res)=>{
@@ -74,7 +85,7 @@ app.post("/api/luka-ai",async(req,res)=>{
     const message=String(req.body?.message||"").trim();
     if(!message) return res.status(400).json({error:"メッセージが空です"});
     const client=makeOpenAI();
-    if(!client) return res.status(503).json({error:"Luka AIがまだ設定されていません"});
+    if(!client) return res.status(503).json({error:"Luka AIのAPIキーがRenderに設定されていません。RenderのEnvironment Variablesを確認してください。",code:"AI_KEY_MISSING"});
 
     const history=Array.isArray(req.body?.conversation)?req.body.conversation.slice(-12):[];
     const input=[
@@ -90,7 +101,8 @@ app.post("/api/luka-ai",async(req,res)=>{
     res.json({ok:true,reply});
   }catch(e){
     console.error("Luka AI error:",e);
-    res.status(500).json({error:"Luka AIの応答に失敗しました"});
+    const msg=String(e?.message||"unknown error");
+    res.status(500).json({error:"Luka AIの応答に失敗しました",code:"AI_REQUEST_FAILED",detail:msg.slice(0,300)});
   }
 });
 
