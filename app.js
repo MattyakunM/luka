@@ -60,7 +60,7 @@ function shell(){
   <button class="newspace" onclick="createSpace()">＋ スペースを作成</button>
   <hr>
   <button class="nav" onclick="view('call')">📞 通話</button>
-  ${state.user.isAdmin?'<button class="nav admin" onclick="view(\\'admin\\')">👑 管理者</button>':''}
+${state.user.isAdmin ? "<button class=\"nav admin\" onclick=\"view('admin')\">👑 管理者</button>" : ""}
   <button class="nav" onclick="view('settings')">⚙️ 設定</button>
  </aside><section id="content"></section></main>`;
  renderSpaces(); updateBadge(); view("home");
