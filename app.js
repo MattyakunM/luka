@@ -60,7 +60,7 @@ function shell(){
   <button class="newspace" onclick="createSpace()">＋ スペースを作成</button>
   <hr>
   <button class="nav" onclick="view('call')">📞 通話</button>
-  ${state.user.isAdmin?'<button class="nav admin" onclick="view(\\'admin\\')">👑 管理者</button>':''}
+  ${state.user.isAdmin ? "<button class=\"nav admin\" onclick=\"view('admin')\">👑 管理者</button>" : ""}
   <button class="nav" onclick="view('settings')">⚙️ 設定</button>
  </aside><section id="content"></section></main>`;
  renderSpaces(); updateBadge(); view("home");
@@ -113,158 +113,210 @@ function content(html){document.getElementById("content").innerHTML=html}
 shell();
 
 
-/* ===== Luka V4 Account System (integrated) =====
-   そら = the only admin. Other created accounts are normal users.
-   Local V4: accounts are stored in localStorage.
-*/
+/* =========================================================
+   Luka V4 Account Switch / Account Management
+   - そら is the only admin account
+   - Other accounts are normal accounts
+   - Account switching is available from Admin and Profile
+   - V4 prototype: browser localStorage only
+   ========================================================= */
 (function(){
   const ACCOUNT_KEY = "luka_v4_accounts";
-  const readAccounts = () => {
-    try { return JSON.parse(localStorage.getItem(ACCOUNT_KEY) || "null"); } catch { return null; }
-  };
-  const writeAccounts = a => localStorage.setItem(ACCOUNT_KEY, JSON.stringify(a));
+  let accounts = [];
+  try { accounts = JSON.parse(localStorage.getItem(ACCOUNT_KEY) || "[]"); } catch(e) { accounts = []; }
 
-  let accounts = readAccounts();
-  if(!Array.isArray(accounts) || !accounts.length){
-    accounts = [{id:"sora",username:"sora",displayName:"そら",bio:"",status:"オンライン",avatar:"",isAdmin:true}];
+  function saveAccounts(){
+    localStorage.setItem(ACCOUNT_KEY, JSON.stringify(accounts));
   }
 
-  // Legacy V4 -> account store migration. Keep existing そら data.
-  state.accounts = accounts;
-  if(!state.activeAccountId) state.activeAccountId = "sora";
-
-  // そら is the sole administrator. Never grant admin to newly created accounts.
-  let sora = state.accounts.find(a => a.username === "sora" || a.id === "sora");
-  if(!sora){
-    sora = {id:"sora",username:"sora",displayName:"そら",bio:"",status:"オンライン",avatar:"",isAdmin:true};
-    state.accounts.unshift(sora);
+  function syncAccountFromCurrent(){
+    if(!state || !state.user) return;
+    const a = accounts.find(x => x.id === state.user.id || x.username === state.user.username);
+    if(a){
+      Object.assign(a, {
+        username: state.user.username,
+        name: state.user.name || state.user.username,
+        avatar: state.user.avatar || "",
+        isAdmin: a.username === "そら" || a.id === "sora"
+      });
+    }
+    const u = state.users && state.users.find(x => x.id === "me");
+    if(u) Object.assign(u, state.user);
+    saveAccounts();
   }
-  state.accounts.forEach(a => a.isAdmin = (a.id === sora.id));
 
-  const syncCurrent = () => {
-    const a = state.accounts.find(x => x.id === state.activeAccountId);
-    if(!a || !state.user) return;
-    Object.assign(a, {
-      username: state.user.username,
-      displayName: state.user.displayName,
-      bio: state.user.bio || "",
-      status: state.user.status || "",
-      avatar: state.user.avatar || "",
-      isAdmin: a.id === sora.id
-    });
-    writeAccounts(state.accounts);
-  };
+  function ensureAccounts(){
+    if(!accounts.length){
+      accounts = [{
+        id:"sora",
+        username:"そら",
+        name:"そら",
+        avatar:"",
+        isAdmin:true
+      }];
+    }
 
-  const loadAccount = id => {
-    const a = state.accounts.find(x => x.id === id);
-    if(!a) return false;
-    state.activeAccountId = id;
+    // Keep exactly one management account: そら.
+    let sora = accounts.find(x => x.username === "そら" || x.id === "sora");
+    if(!sora){
+      sora = accounts[0];
+      sora.username = "そら";
+      sora.name = "そら";
+      sora.id = "sora";
+    }
+    accounts.forEach(x => x.isAdmin = (x.id === sora.id));
+    saveAccounts();
+  }
+
+  function addUserProfile(a){
+    if(!state.users) state.users = [];
+    if(a.id !== "sora" && !state.users.some(u => u.id === a.id)){
+      state.users.push({
+        id:a.id, username:a.username, name:a.name,
+        avatar:a.avatar || "", isAdmin:false, online:false
+      });
+    }
+  }
+
+  function switchAccount(id){
+    syncAccountFromCurrent();
+    const target = accounts.find(x => x.id === id);
+    if(!target) return;
     state.user = {
-      id:"me", username:a.username, displayName:a.displayName,
-      bio:a.bio || "", status:a.status || "オンライン", avatar:a.avatar || "",
-      isAdmin:a.id === sora.id
+      id: target.id === "sora" ? "me" : target.id,
+      username: target.username,
+      name: target.name,
+      avatar: target.avatar || "",
+      isAdmin: !!target.isAdmin
     };
-    state.users ||= [];
-    const me = state.users.find(x => x.id === "me");
-    if(me) Object.assign(me, state.user);
-    else state.users.unshift({...state.user});
-    save();
-    return true;
-  };
-
-  // Preserve the currently stored そら profile when possible.
-  const current = state.accounts.find(x => x.id === state.activeAccountId);
-  if(current && state.user){
-    Object.assign(current, {
-      username: state.user.username || current.username,
-      displayName: state.user.displayName || current.displayName,
-      bio: state.user.bio || current.bio || "",
-      status: state.user.status || current.status || "オンライン",
-      avatar: state.user.avatar || current.avatar || ""
+    // Existing V4 code expects the current user to be "me".
+    state.users = (state.users || []).filter(u => u.id !== "me");
+    state.users.unshift({
+      id:"me", username:state.user.username, name:state.user.name,
+      avatar:state.user.avatar || "", isAdmin:state.user.isAdmin, online:true
     });
+    localStorage.setItem("luka_v4_state", JSON.stringify(state));
+    shell();
+    view("home");
   }
-  state.user.isAdmin = state.activeAccountId === sora.id;
-  writeAccounts(state.accounts);
-  save();
 
-  window.LukaAccounts = {
-    list(){ return state.accounts.slice(); },
-    create(username, displayName){
-      username = (username || "").trim();
-      displayName = (displayName || username).trim();
-      if(!username) throw new Error("ユーザー名を入力してください");
-      if(state.accounts.some(a => a.username.toLowerCase() === username.toLowerCase()))
-        throw new Error("そのユーザー名はすでに使われています");
-      const a = {id:"acct_"+uid(),username,displayName,bio:"",status:"オンライン",avatar:"",isAdmin:false};
-      state.accounts.push(a);
-      writeAccounts(state.accounts); save();
-      return a;
-    },
-    switchTo(id){
-      syncCurrent();
-      if(!loadAccount(id)) throw new Error("アカウントが見つかりません");
-      shell();
-      return true;
-    },
-    current(){ return state.activeAccountId; }
+  function createAccount(){
+    if(!state.user.isAdmin){
+      alert("管理者アカウントのみ作成できます。");
+      return;
+    }
+    const username = prompt("新しいアカウント名を入力してください");
+    if(!username) return;
+    const clean = username.trim();
+    if(!clean) return;
+    if(accounts.some(a => a.username === clean)){
+      alert("そのアカウントはすでに存在します。");
+      return;
+    }
+    const id = "acct_" + Date.now().toString(36);
+    const a = {id, username:clean, name:clean, avatar:"", isAdmin:false};
+    accounts.push(a);
+    addUserProfile(a);
+    saveAccounts();
+    localStorage.setItem("luka_v4_state", JSON.stringify(state));
+    alert("通常アカウント「" + clean + "」を作成しました。");
+    admin();
+  }
+
+  function accountSwitcher(){
+    const current = accounts.find(a =>
+      a.username === state.user.username || (state.user.isAdmin && a.id === "sora")
+    );
+    return `
+      <div class="card">
+        <h3>アカウント切替</h3>
+        <p class="muted">現在：${current ? current.name : state.user.name}</p>
+        <div class="list">
+          ${accounts.map(a => `
+            <div class="row">
+              <div>
+                <strong>${a.name}</strong>
+                <div class="muted">@${a.username}${a.isAdmin ? " 👑 管理者" : ""}</div>
+              </div>
+              <button class="btn" onclick="lukaSwitchAccount('${a.id}')">
+                ${current && current.id === a.id ? "使用中" : "切替"}
+              </button>
+            </div>
+          `).join("")}
+        </div>
+      </div>`;
+  }
+
+  window.lukaSwitchAccount = switchAccount;
+  window.lukaCreateAccount = createAccount;
+
+  ensureAccounts();
+
+  // Make the current V4 "sora/そら" account the sole admin without
+  // creating a second admin account.
+  if(state && state.user){
+    const currentIsSora = state.user.username === "そら" || state.user.username === "sora";
+    if(currentIsSora){
+      state.user.username = "そら";
+      state.user.name = "そら";
+      state.user.isAdmin = true;
+      if(!accounts.some(a => a.id === "sora")){
+        accounts.push({id:"sora",username:"そら",name:"そら",avatar:state.user.avatar||"",isAdmin:true});
+      }
+    }
+  }
+  ensureAccounts();
+  saveAccounts();
+
+  // Wrap the existing profile/admin views.
+  const baseProfile = window.profile;
+  const baseAdmin = window.admin;
+
+  window.profile = function(){
+    baseProfile();
+    setTimeout(() => {
+      const host = document.querySelector("#profileAccountSwitcher");
+      if(host) host.innerHTML = accountSwitcher();
+    }, 0);
   };
 
-  // Account-aware lookup for the currently active account.
-  const legacyUser = user;
-  user = function(id){ return id === "me" ? state.user : legacyUser(id); };
+  window.admin = function(){
+    baseAdmin();
+    setTimeout(() => {
+      const root = document.querySelector("#app");
+      if(!root) return;
+      const marker = document.querySelector("#lukaAccountPanel");
+      if(marker) return;
 
-  // Profile: everyone can switch between locally created accounts; only admin can create.
-  const legacyProfile = profile;
-  profile = function(){
-    legacyProfile();
-    const box = document.getElementById("content");
-    if(!box) return;
-    const rows = state.accounts.map(a => `
-      <div class="row">
-        <span>${a.isAdmin?"👑":"👤"} <b>${esc(a.displayName)}</b> <small>@${esc(a.username)}</small></span>
-        <span>${a.id===state.activeAccountId ? "<b>使用中</b>" : `<button onclick="LukaAccounts.switchTo('${a.id}')">切り替え</button>`}</span>
-      </div>`).join("");
-    box.insertAdjacentHTML("beforeend", `<div class="card">
-      <h3>🔄 アカウント切り替え</h3>
-      <p class="muted">このブラウザに保存されているアカウントを切り替えます。</p>
-      ${rows}
-    </div>`);
+      const panel = document.createElement("div");
+      panel.id = "lukaAccountPanel";
+      panel.innerHTML = `
+        <div class="card" style="margin-top:16px">
+          <h3>アカウント管理</h3>
+          <p class="muted">「そら」が唯一の管理者です。ここから通常アカウントを作成・切替できます。</p>
+          <button class="btn primary" onclick="lukaCreateAccount()">＋ 通常アカウントを作成</button>
+          <div style="margin-top:12px">${accountSwitcher()}</div>
+        </div>`;
+      root.appendChild(panel);
+    }, 0);
   };
 
-  // Admin: account creation + switching in one place.
-  const legacyAdmin = admin;
-  admin = function(){
-    if(!state.user.isAdmin) return legacyAdmin();
-    legacyAdmin();
-    const box = document.getElementById("content");
-    if(!box) return;
-    const rows = state.accounts.map(a => `
-      <div class="row">
-        <span>${a.isAdmin?"👑":"👤"} <b>${esc(a.displayName)}</b> <small>@${esc(a.username)}</small></span>
-        <span>${a.id===state.activeAccountId ? "<b>使用中</b>" : `<button onclick="LukaAccounts.switchTo('${a.id}')">このアカウントに切替</button>`}</span>
-      </div>`).join("");
-    box.insertAdjacentHTML("afterbegin", `<div class="card">
-      <h3>🔄 アカウント管理</h3>
-      <p class="muted">管理者は「そら」だけです。ここから一般アカウントを作成・切り替えできます。</p>
-      ${rows}
-      <hr>
-      <h4>＋ 一般アカウントを作成</h4>
-      <label>ユーザー名<input id="newAcctUsername" placeholder="例：sample_user"></label>
-      <label>表示名<input id="newAcctDisplay" placeholder="例：サンプルユーザー"></label>
-      <button onclick="createLukaAccount()">アカウントを作成</button>
-    </div>`);
-  };
-
-  window.createLukaAccount = function(){
-    try{
-      const u = document.getElementById("newAcctUsername")?.value || "";
-      const d = document.getElementById("newAcctDisplay")?.value || "";
-      const a = LukaAccounts.create(u,d);
-      alert(`「${a.displayName}」を作成しました！`);
-      admin();
-    }catch(e){ alert(e.message || "作成できませんでした"); }
-  };
-
-  // Render the admin screen once after the base app has initialized.
-  setTimeout(() => { if(state.user.isAdmin) admin(); }, 0);
+  // Ensure the profile view has a mount point if the base profile supports it.
+  // If it doesn't, append the account panel directly after rendering.
+  const observer = new MutationObserver(() => {
+    const app = document.querySelector("#app");
+    if(!app) return;
+    if(document.querySelector("#profileAccountSwitcher")) return;
+    if(document.body && app.innerText.includes("プロフィール")){
+      const cards = app.querySelectorAll(".card");
+      const last = cards[cards.length-1];
+      if(last && !document.querySelector("#lukaProfileAccountPanel")){
+        const panel = document.createElement("div");
+        panel.id = "lukaProfileAccountPanel";
+        panel.innerHTML = accountSwitcher();
+        last.parentNode.appendChild(panel);
+      }
+    }
+  });
+  observer.observe(document.body, {childList:true, subtree:true});
 })();
