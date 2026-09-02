@@ -1,10 +1,89 @@
 {
-  "version": "4.0-local-complete",
-  "note": "初期データ。既存localStorageは上書きしません。",
-  "admin": "sora",
-  "official_accounts": [
-    "official",
-    "update",
-    "adminai"
+  "version": 4,
+  "accounts": [
+    {
+      "id": "sora",
+      "name": "そら",
+      "handle": "sora",
+      "type": "user",
+      "isAdmin": true,
+      "suspended": false,
+      "bio": "Luka管理者"
+    },
+    {
+      "id": "luka_official",
+      "name": "Luka公式",
+      "handle": "luka_official",
+      "type": "ai",
+      "isAdmin": false,
+      "suspended": false,
+      "bio": "Lukaの公式サポートAI"
+    },
+    {
+      "id": "luka_update",
+      "name": "Luka Update",
+      "handle": "luka_update",
+      "type": "update",
+      "isAdmin": false,
+      "suspended": false,
+      "bio": "Lukaの更新情報"
+    },
+    {
+      "id": "luka_admin",
+      "name": "Luka管理者",
+      "handle": "luka_admin",
+      "type": "admin_ai",
+      "isAdmin": false,
+      "suspended": false,
+      "bio": "管理者向けLuka AI"
+    },
+    {
+      "id": "sample",
+      "name": "サンプルユーザー",
+      "handle": "sample",
+      "type": "user",
+      "isAdmin": false,
+      "suspended": false,
+      "bio": "テスト用アカウント"
+    }
+  ],
+  "spaces": [
+    {
+      "id": "official",
+      "name": "Luka Official",
+      "owner": "sora",
+      "inviteOnly": false,
+      "members": [
+        "sora",
+        "sample",
+        "luka_official"
+      ],
+      "rooms": [
+        {
+          "id": "lobby",
+          "name": "ロビー"
+        },
+        {
+          "id": "help",
+          "name": "ヘルプ"
+        }
+      ]
+    },
+    {
+      "id": "test",
+      "name": "テストスペース",
+      "owner": "sora",
+      "inviteOnly": true,
+      "members": [
+        "sora",
+        "sample"
+      ],
+      "rooms": [
+        {
+          "id": "lobby2",
+          "name": "ロビー"
+        }
+      ]
+    }
   ]
 }
