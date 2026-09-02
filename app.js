@@ -41,18 +41,42 @@ let modalEl=null;
 let toastTimer=null;
 
 function uid(prefix="id"){return prefix+"_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,8)}
-function save(){localStorage.setItem(KEY,JSON.stringify(state))}
+let syncTimer=null;
 function clone(x){return JSON.parse(JSON.stringify(x))}
-function load(){
-  try{
-    const x=JSON.parse(localStorage.getItem(KEY));
-    if(x && x.accounts) return normalize(x);
-  }catch(e){}
-  const x=clone(seed);
-  saveStateDirect(x);
-  return x;
+function save(){
+  localStorage.setItem(KEY,JSON.stringify(state));
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(()=>pushServerState(),60);
 }
 function saveStateDirect(x){localStorage.setItem(KEY,JSON.stringify(x))}
+function localUserId(){return localStorage.getItem(DEVICE_KEY)||localStorage.getItem("luka_active_user")||"sora"}
+function stateForServer(){
+  const x=clone(state);
+  delete x.userId;
+  return x;
+}
+async function pushServerState(){
+  try{
+    await fetch("/api/state",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(stateForServer())});
+  }catch(e){ console.warn("Luka server sync failed",e); }
+}
+async function pullServerState(){
+  try{
+    const r=await fetch("/api/state",{cache:"no-store"});
+    if(!r.ok) throw new Error("state fetch failed");
+    const x=normalize(await r.json());
+    const wanted=localUserId();
+    state=x;
+    state.userId=state.accounts.some(a=>a.id===wanted&&!a.suspended)?wanted:"sora";
+    saveStateDirect(state);
+    render();
+  }catch(e){
+    state=normalize(state);
+    state.userId=state.accounts.some(a=>a.id===localUserId()&&!a.suspended)?localUserId():"sora";
+    render();
+    toast("サーバーに接続できないためローカル状態で起動しました");
+  }
+}
 function normalize(x){
   x.accounts ||= []; x.friends ||= []; x.friendRequests ||= []; x.blocks ||= [];
   x.dms ||= []; x.messages ||= []; x.spaces ||= []; x.notifications ||= [];
@@ -64,7 +88,7 @@ function me(){return state.accounts.find(a=>a.id===state.userId)||state.accounts
 function setUser(id){
   const a=state.accounts.find(x=>x.id===id);
   if(!a || a.suspended){toast("このアカウントは使用できません");return}
-  state.userId=id; save(); render();
+  state.userId=id; localStorage.setItem(DEVICE_KEY,id); localStorage.setItem("luka_active_user",id); save(); render();
 }
 if(!state.userId) state.userId="sora";
 
@@ -294,5 +318,6 @@ window.createAccount=createAccount;window.switchAccount=switchAccount;window.tog
 window.saveSettings=saveSettings;window.exportBackup=exportBackup;window.importBackup=importBackup;window.resetLocal=resetLocal;
 
 window.page="home";
-save();
+state.userId=localUserId();
 render();
+pullServerState();
