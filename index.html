@@ -1,18 +1,5 @@
-<!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Luka</title><link rel="stylesheet" href="/style.css"></head>
-<body>
-<div id="auth" class="auth"><div class="auth-card"><div class="logo">Luka</div><p class="sub">つながる。話す。つくる。</p>
-<input id="username" placeholder="ユーザー名"><input id="password" type="password" placeholder="パスワード">
-<div class="row"><button onclick="login()">ログイン</button><button class="secondary" onclick="register()">新規登録</button></div><div id="authMsg"></div></div></div>
-<div id="app" class="hidden">
-<header><div class="brand">Luka</div><div id="me"></div><button class="secondary" onclick="logout()">ログアウト</button></header>
-<div class="layout"><aside><div class="side-title">スペース <button onclick="createSpace()">＋</button></div><div id="spaces"></div>
-<div class="side-actions"><button onclick="joinSpace()">招待コードで参加</button><button id="adminBtn" class="hidden" onclick="showAdmin()">👑 管理者</button></div></aside>
-<main><div id="welcome" class="welcome"><h1>Lukaへようこそ</h1><p>スペースを作るか、招待コードで参加しよう。</p></div>
-<div id="spaceView" class="hidden"><div class="space-head"><div><div id="spaceName"></div><small id="spaceMeta"></small></div><div class="row"><button onclick="createRoom()">＋ 部屋</button><button onclick="spaceSettings()">⚙ 設定</button></div></div>
-<div class="content"><nav id="rooms"></nav><section><div id="roomTitle"></div><div id="messages"></div><div class="composer"><input id="msg" placeholder="メッセージを入力…"><button onclick="sendMsg()">送信</button></div></section></div></div>
-<div id="adminView" class="hidden"><div class="space-head"><h2>👑 管理者ダッシュボード</h2><button onclick="backHome()">戻る</button></div><div id="adminContent"></div></div>
-</main></div></div>
-<script src="/socket.io/socket.io.js"></script><script src="/app.js"></script>
-</body></html>
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#111827"><title>Luka Web</title><link rel="stylesheet" href="/style.css"></head><body>
+<header class="top"><b>● Luka</b><span id="account"></span></header><main>
+<section id="auth" class="card auth"><h1>Luka Web</h1><p>今までのLukaをWebサービスとして育てていこう。</p><div><button class="tab active" data-mode="login">ログイン</button><button class="tab" data-mode="register">新規登録</button></div><form id="authForm"><input id="username" placeholder="ユーザー名" required><input id="password" type="password" placeholder="パスワード（8文字以上）" required><button class="primary" id="authSubmit">ログイン</button></form><p id="authMsg"></p></section>
+<section id="app" class="layout hidden"><aside class="card side"><h3>スペース</h3><div id="spaces"></div><button id="newSpace" class="secondary">＋ スペース</button></aside><section class="card work"><header><b id="spaceName">ホーム</b><span id="roomName">部屋を選択</span><span id="badge"></span></header><nav id="rooms"></nav><div id="messages"><div class="empty">Luka Webへようこそ！</div></div><form id="messageForm"><input id="messageInput" maxlength="4000" placeholder="メッセージを入力…"><button class="primary">送信</button></form></section></section></main>
+<script src="/socket.io/socket.io.js"></script><script src="/app.js"></script></body></html>

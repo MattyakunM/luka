@@ -1,257 +1,36 @@
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
-const multer = require("multer");
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
+const express=require("express"),http=require("http"),path=require("path"),fs=require("fs"),crypto=require("crypto"),bcrypt=require("bcryptjs"),jwt=require("jsonwebtoken"),{Server}=require("socket.io");
+const app=express(),server=http.createServer(app),io=new Server(server),PORT=process.env.PORT||3000;
+const SECRET=process.env.JWT_SECRET||"CHANGE_THIS_IN_PRODUCTION",DATA=path.join(__dirname,"luka.json");
+app.use(express.json({limit:"1mb"})); app.use(express.static(__dirname));
+function load(){if(!fs.existsSync(DATA))return base();try{const d=JSON.parse(fs.readFileSync(DATA));d.version=3;for(const k of ["users","spaces","rooms","messages","friends","friendRequests","notifications","reports","blocks","invites"])if(!Array.isArray(d[k]))d[k]=[];return d}catch{return base()}}
+function base(){return {version:3,users:[],spaces:[],rooms:[],messages:[],friends:[],friendRequests:[],notifications:[],reports:[],blocks:[],invites:[]}}
+let db=load(); function save(){const t=DATA+".tmp";fs.writeFileSync(t,JSON.stringify(db,null,2));fs.renameSync(t,DATA)}
+const id=p=>p+"_"+crypto.randomBytes(8).toString("hex");
+const pub=u=>({id:u.id,username:u.username,displayName:u.displayName||u.username,bio:u.bio||"",accountType:u.accountType||"user",isAdmin:!!u.isAdmin,createdAt:u.createdAt});
+function auth(req,res,next){const h=req.headers.authorization||"",t=h.startsWith("Bearer ")?h.slice(7):"";if(!t)return res.status(401).json({error:"ログインが必要です"});try{const p=jwt.verify(t,SECRET),u=db.users.find(x=>x.id===p.uid);if(!u)throw 0;req.user=u;next()}catch{res.status(401).json({error:"セッションが無効です"})}}
+function admin(req,res,next){if(!req.user.isAdmin&&req.user.accountType!=="admin")return res.status(403).json({error:"管理者権限が必要です"});next()}
+app.get("/",(q,s)=>s.sendFile(path.join(__dirname,"index.html")));app.get("/health",(q,s)=>s.json({ok:true,version:"3.0.0-foundation"}));
 
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-const PORT = process.env.PORT || 3000;
+app.post("/api/auth/register",async(req,res)=>{const username=String(req.body.username||"").trim(),password=String(req.body.password||"");if(!/^[A-Za-z0-9_]{3,24}$/.test(username))return res.status(400).json({error:"ユーザー名は3〜24文字の英数字・_で入力してください"});if(password.length<8)return res.status(400).json({error:"パスワードは8文字以上にしてください"});if(db.users.some(u=>u.username.toLowerCase()===username.toLowerCase()))return res.status(409).json({error:"そのユーザー名は使用されています"});const u={id:id("usr"),username,displayName:username,bio:"",passwordHash:await bcrypt.hash(password,12),accountType:"user",isAdmin:!db.users.some(x=>x.isAdmin),createdAt:new Date().toISOString()};db.users.push(u);save();res.json({token:jwt.sign({uid:u.id},SECRET,{expiresIn:"30d"}),user:pub(u)})});
+app.post("/api/auth/login",async(req,res)=>{const username=String(req.body.username||"").trim(),password=String(req.body.password||""),u=db.users.find(x=>x.username.toLowerCase()===username.toLowerCase());if(!u)return res.status(401).json({error:"ユーザー名またはパスワードが違います"});let ok=false;if(u.passwordHash)ok=await bcrypt.compare(password,u.passwordHash);else if(u.legacySha256){ok=crypto.createHash("sha256").update(password).digest("hex")===u.legacySha256;if(ok){u.passwordHash=await bcrypt.hash(password,12);delete u.legacySha256;save()}}if(!ok)return res.status(401).json({error:"ユーザー名またはパスワードが違います"});res.json({token:jwt.sign({uid:u.id},SECRET,{expiresIn:"30d"}),user:pub(u)})});
+app.get("/api/me",auth,(q,s)=>s.json({user:pub(q.user)}));
 
-const DATA = path.join(__dirname, "luka.json");
-const UPLOADS = path.join(__dirname, "uploads");
-if (!fs.existsSync(UPLOADS)) fs.mkdirSync(UPLOADS, {recursive:true});
+app.get("/api/spaces",auth,(q,s)=>{const a=q.user.isAdmin||q.user.accountType==="admin";s.json({spaces:db.spaces.filter(x=>a||(x.members||[]).includes(q.user.id)).map(x=>({...x,rooms:db.rooms.filter(r=>r.spaceId===x.id)}))})});
+app.post("/api/spaces",auth,(q,s)=>{const name=String(q.body.name||"").trim().slice(0,60);if(!name)return s.status(400).json({error:"スペース名を入力してください"});const x={id:id("sp"),name,description:String(q.body.description||"").slice(0,300),ownerId:q.user.id,inviteOnly:true,members:[q.user.id],createdAt:new Date().toISOString()};db.spaces.push(x);const r={id:id("room"),spaceId:x.id,name:"ロビー",createdAt:new Date().toISOString()};db.rooms.push(r);save();s.json({space:{...x,rooms:[r]}})});
+app.post("/api/spaces/:sid/invites",auth,(q,s)=>{const x=db.spaces.find(x=>x.id===q.params.sid);if(!x)return s.status(404).json({error:"スペースがありません"});if(x.ownerId!==q.user.id&&!q.user.isAdmin)return s.status(403).json({error:"権限がありません"});const i={id:id("inv"),spaceId:x.id,code:crypto.randomBytes(4).toString("hex").toUpperCase(),createdBy:q.user.id,createdAt:new Date().toISOString()};db.invites.push(i);save();s.json({invite:i})});
+app.post("/api/spaces/:sid/join",auth,(q,s)=>{const i=db.invites.find(i=>i.spaceId===q.params.sid&&i.code===String(q.body.code||"").trim());const x=db.spaces.find(x=>x.id===q.params.sid);if(!i||!x)return s.status(400).json({error:"招待コードが正しくありません"});x.members||=[];if(!x.members.includes(q.user.id))x.members.push(q.user.id);save();io.emit("spaceUpdate",{sid:x.id});s.json({ok:true})});
+app.delete("/api/spaces/:sid",auth,(q,s)=>{const x=db.spaces.find(x=>x.id===q.params.sid);if(!x)return s.status(404).json({error:"スペースがありません"});if(x.ownerId!==q.user.id&&!q.user.isAdmin)return s.status(403).json({error:"権限がありません"});db.rooms=db.rooms.filter(r=>r.spaceId!==x.id);db.messages=db.messages.filter(m=>m.spaceId!==x.id);db.invites=db.invites.filter(i=>i.spaceId!==x.id);db.spaces=db.spaces.filter(s=>s.id!==x.id);save();io.emit("spaceUpdate",{sid:x.id});s.json({ok:true})});
+app.post("/api/spaces/:sid/rooms",auth,(q,s)=>{const x=db.spaces.find(x=>x.id===q.params.sid);if(!x)return s.status(404).json({error:"スペースがありません"});if(!x.members?.includes(q.user.id)&&!q.user.isAdmin)return s.status(403).json({error:"参加していません"});const name=String(q.body.name||"").trim().slice(0,60);if(!name)return s.status(400).json({error:"部屋名を入力してください"});const r={id:id("room"),spaceId:x.id,name,createdAt:new Date().toISOString()};db.rooms.push(r);save();io.emit("spaceUpdate",{sid:x.id});s.json({room:r})});
+app.delete("/api/spaces/:sid/rooms/:rid",auth,(q,s)=>{const x=db.spaces.find(x=>x.id===q.params.sid),r=db.rooms.find(r=>r.id===q.params.rid&&r.spaceId===q.params.sid);if(!x||!r)return s.status(404).json({error:"見つかりません"});if(x.ownerId!==q.user.id&&!q.user.isAdmin)return s.status(403).json({error:"権限がありません"});if(r.name==="ロビー")return s.status(400).json({error:"ロビーは削除できません"});db.messages=db.messages.filter(m=>m.roomId!==r.id);db.rooms=db.rooms.filter(x=>x.id!==r.id);save();io.emit("spaceUpdate",{sid:x.id});s.json({ok:true})});
 
-app.use(express.json({limit:"1mb"}));
-app.use(express.urlencoded({extended:true}));
-app.use(express.static(__dirname));
-app.use("/uploads", express.static(UPLOADS));
+app.get("/api/rooms/:rid/messages",auth,(q,s)=>{const r=db.rooms.find(r=>r.id===q.params.rid),x=r&&db.spaces.find(x=>x.id===r.spaceId);if(!r||!x)return s.status(404).json({error:"部屋がありません"});if(!x.members?.includes(q.user.id)&&!q.user.isAdmin)return s.status(403).json({error:"アクセスできません"});s.json({messages:db.messages.filter(m=>m.roomId===r.id).sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt)).slice(-200)})});
+app.post("/api/rooms/:rid/messages",auth,(q,s)=>{const r=db.rooms.find(r=>r.id===q.params.rid),x=r&&db.spaces.find(x=>x.id===r.spaceId);if(!r||!x)return s.status(404).json({error:"部屋がありません"});if(!x.members?.includes(q.user.id)&&!q.user.isAdmin)return s.status(403).json({error:"アクセスできません"});const body=String(q.body.body||"").trim().slice(0,4000);if(!body)return s.status(400).json({error:"メッセージを入力してください"});const m={id:id("msg"),roomId:r.id,spaceId:x.id,userId:q.user.id,body,replyTo:q.body.replyTo||null,createdAt:new Date().toISOString(),editedAt:null,deletedAt:null};db.messages.push(m);save();io.to(r.id).emit("message",m);s.json({message:m})});
+app.patch("/api/messages/:mid",auth,(q,s)=>{const m=db.messages.find(m=>m.id===q.params.mid);if(!m)return s.status(404).json({error:"メッセージがありません"});if(m.userId!==q.user.id&&!q.user.isAdmin)return s.status(403).json({error:"権限がありません"});const b=String(q.body.body||"").trim().slice(0,4000);if(!b)return s.status(400).json({error:"本文が空です"});m.body=b;m.editedAt=new Date().toISOString();save();io.to(m.roomId).emit("messageUpdate",m);s.json({message:m})});
+app.delete("/api/messages/:mid",auth,(q,s)=>{const m=db.messages.find(m=>m.id===q.params.mid);if(!m)return s.status(404).json({error:"メッセージがありません"});if(m.userId!==q.user.id&&!q.user.isAdmin)return s.status(403).json({error:"権限がありません"});m.deletedAt=new Date().toISOString();m.body="このメッセージは削除されました";save();io.to(m.roomId).emit("messageUpdate",m);s.json({ok:true})});
 
-function load(){
-  if(!fs.existsSync(DATA)) return {users:{}, spaces:{}, sessions:{}, invites:{}, reports:{}, notifications:{}};
-  try {
-    const d = JSON.parse(fs.readFileSync(DATA,"utf8"));
-    d.users ||= {}; d.spaces ||= {}; d.sessions ||= {}; d.invites ||= {}; d.reports ||= {}; d.notifications ||= {};
-    return d;
-  } catch { return {users:{},spaces:{},sessions:{},invites:{},reports:{},notifications:{}}; }
-}
-let db = load();
+app.post("/api/reports",auth,(q,s)=>{const r={id:id("rep"),reporterId:q.user.id,targetUserId:q.body.targetUserId||null,messageId:q.body.messageId||null,reason:String(q.body.reason||"").slice(0,1000),status:"open",createdAt:new Date().toISOString()};if(!r.reason)return s.status(400).json({error:"理由を入力してください"});db.reports.push(r);db.users.filter(u=>u.isAdmin).forEach(u=>db.notifications.push({id:id("not"),userId:u.id,type:"report",title:"新しい通報",body:"ユーザーから通報が届きました。",createdAt:new Date().toISOString(),readAt:null}));save();s.json({ok:true})});
+app.get("/api/admin/reports",auth,admin,(q,s)=>s.json({reports:db.reports}));
+app.patch("/api/admin/reports/:rid",auth,admin,(q,s)=>{const r=db.reports.find(x=>x.id===q.params.rid);if(!r)return s.status(404).json({error:"通報がありません"});r.status=q.body.status==="resolved"?"resolved":"open";r.resolvedAt=r.status==="resolved"?new Date().toISOString():null;save();s.json({report:r})});
 
-function save(){ fs.writeFileSync(DATA, JSON.stringify(db,null,2)); }
-function id(prefix="id"){ return prefix+"_"+crypto.randomBytes(8).toString("hex"); }
-function hash(p){ return crypto.createHash("sha256").update(String(p)).digest("hex"); }
-function now(){ return new Date().toISOString(); }
-
-function migrate(){
-  const users = Object.values(db.users);
-  users.forEach(u=>{
-    u.isAdmin = !!u.isAdmin;
-    u.createdAt ||= now();
-    u.friends ||= [];
-  });
-  // Preserve the old project convention: first account becomes the initial admin.
-  if(users.length && !users.some(u=>u.isAdmin)) {
-    users.sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)))[0].isAdmin = true;
-  }
-  Object.values(db.spaces).forEach(s=>{
-    s.members ||= {};
-    if(s.owner && !s.members[s.owner]) s.members[s.owner] = {joinedAt:s.createdAt||now()};
-    s.rooms ||= {};
-    s.inviteOnly = true;
-    Object.values(s.rooms).forEach(r=>{ r.messages ||= []; });
-  });
-  save();
-}
-migrate();
-
-function auth(req,res,next){
-  const token = req.headers.authorization?.replace(/^Bearer\s+/,"");
-  const uid = token && db.sessions[token];
-  if(!uid || !db.users[uid]) return res.status(401).json({error:"ログインが必要です"});
-  req.uid=uid; req.user=db.users[uid]; next();
-}
-function admin(req,res,next){
-  if(!req.user?.isAdmin) return res.status(403).json({error:"管理者権限が必要です"});
-  next();
-}
-function publicUser(u){
-  return {id:u.id, username:u.username, displayName:u.displayName||u.username, isAdmin:!!u.isAdmin};
-}
-function canSeeSpace(s, uid){
-  return !!s && (s.owner===uid || !!s.members?.[uid] || !!db.users[uid]?.isAdmin);
-}
-function ensureRoom(s,rid){
-  const r=s.rooms?.[rid];
-  if(!r) return null;
-  r.messages ||= [];
-  return r;
-}
-
-app.get("/",(req,res)=>res.sendFile(path.join(__dirname,"index.html")));
-
-app.post("/api/register",(req,res)=>{
-  const username=String(req.body.username||"").trim();
-  const password=String(req.body.password||"");
-  if(username.length<2 || password.length<4) return res.status(400).json({error:"ユーザー名2文字以上・パスワード4文字以上"});
-  if(Object.values(db.users).some(u=>u.username.toLowerCase()===username.toLowerCase()))
-    return res.status(409).json({error:"そのユーザー名は使用されています"});
-  const uid=id("u");
-  db.users[uid]={id:uid,username,displayName:username,password:hash(password),friends:[],createdAt:now(),isAdmin:Object.keys(db.users).length===0};
-  db.notifications[uid]=[];
-  save();
-  const token=id("tok"); db.sessions[token]=uid; save();
-  res.json({token,user:publicUser(db.users[uid])});
-});
-
-app.post("/api/login",(req,res)=>{
-  const username=String(req.body.username||"").trim();
-  const u=Object.values(db.users).find(x=>x.username.toLowerCase()===username.toLowerCase());
-  if(!u || u.password!==hash(req.body.password||"")) return res.status(401).json({error:"ユーザー名またはパスワードが違います"});
-  const token=id("tok"); db.sessions[token]=u.id; save();
-  res.json({token,user:publicUser(u)});
-});
-
-app.get("/api/me",auth,(req,res)=>res.json({user:publicUser(req.user)}));
-
-app.get("/api/users/search",auth,(req,res)=>{
-  const q=String(req.query.q||"").toLowerCase();
-  res.json({users:Object.values(db.users).filter(u=>u.id!==req.uid && u.username.toLowerCase().includes(q)).slice(0,20).map(publicUser)});
-});
-
-app.get("/api/spaces",auth,(req,res)=>{
-  const spaces=Object.values(db.spaces).filter(s=>canSeeSpace(s,req.uid)).map(s=>({
-    id:s.id,name:s.name,owner:s.owner,memberCount:Object.keys(s.members||{}).length,
-    isAdmin:!!req.user.isAdmin, inviteOnly:true
-  }));
-  res.json({spaces});
-});
-
-app.post("/api/spaces",auth,(req,res)=>{
-  const name=String(req.body.name||"").trim();
-  if(!name) return res.status(400).json({error:"スペース名を入力してください"});
-  const sid=id("sp");
-  db.spaces[sid]={id:sid,name,owner:req.uid,createdAt:now(),inviteOnly:true,members:{[req.uid]:{joinedAt:now()}},
-    rooms:{[id("r")]:{name:"ロビー",messages:[]}}};
-  save(); io.emit("spaceUpdate",{sid});
-  res.json({space:db.spaces[sid]});
-});
-
-app.get("/api/spaces/:sid",auth,(req,res)=>{
-  const s=db.spaces[req.params.sid];
-  if(!s || !canSeeSpace(s,req.uid)) return res.status(404).json({error:"スペースが見つかりません"});
-  res.json({space:{...s, members:Object.keys(s.members||{}).map(uid=>publicUser(db.users[uid])).filter(Boolean)}});
-});
-
-app.post("/api/spaces/:sid/rooms",auth,(req,res)=>{
-  const s=db.spaces[req.params.sid];
-  if(!s || !canSeeSpace(s,req.uid)) return res.status(404).json({error:"スペースが見つかりません"});
-  const name=String(req.body.name||"").trim();
-  if(!name) return res.status(400).json({error:"部屋名を入力してください"});
-  const rid=id("r"); s.rooms[rid]={name,messages:[]}; save(); io.emit("spaceUpdate",{sid:s.id});
-  res.json({room:{id:rid,...s.rooms[rid]}});
-});
-
-app.delete("/api/spaces/:sid/rooms/:rid",auth,(req,res)=>{
-  const s=db.spaces[req.params.sid];
-  if(!s || !canSeeSpace(s,req.uid)) return res.status(404).json({error:"スペースが見つかりません"});
-  if(s.owner!==req.uid && !req.user.isAdmin) return res.status(403).json({error:"管理者権限が必要です"});
-  const r=s.rooms?.[req.params.rid];
-  if(!r) return res.status(404).json({error:"部屋がありません"});
-  if(r.name==="ロビー") return res.status(400).json({error:"ロビーは削除できません"});
-  delete s.rooms[req.params.rid]; save(); io.emit("spaceUpdate",{sid:s.id}); res.json({ok:true});
-});
-
-app.delete("/api/spaces/:sid",auth,(req,res)=>{
-  const s=db.spaces[req.params.sid];
-  if(!s) return res.status(404).json({error:"スペースがありません"});
-  if(s.owner!==req.uid && !req.user.isAdmin) return res.status(403).json({error:"このスペースを削除する権限がありません"});
-  delete db.spaces[req.params.sid]; save(); io.emit("spaceUpdate",{sid:req.params.sid}); res.json({ok:true});
-});
-
-app.post("/api/spaces/:sid/invites",auth,(req,res)=>{
-  const s=db.spaces[req.params.sid];
-  if(!s || !canSeeSpace(s,req.uid)) return res.status(404).json({error:"スペースが見つかりません"});
-  if(s.owner!==req.uid && !req.user.isAdmin) return res.status(403).json({error:"招待権限がありません"});
-  const code=crypto.randomBytes(5).toString("hex").toUpperCase();
-  db.invites[code]={code,sid:s.id,createdBy:req.uid,createdAt:now()};
-  save(); res.json({code});
-});
-
-app.post("/api/invites/join",auth,(req,res)=>{
-  const code=String(req.body.code||"").trim().toUpperCase();
-  const inv=db.invites[code], s=inv && db.spaces[inv.sid];
-  if(!s) return res.status(404).json({error:"招待コードが無効です"});
-  s.members[req.uid]={joinedAt:now()}; save(); io.emit("spaceUpdate",{sid:s.id});
-  res.json({space:{id:s.id,name:s.name}});
-});
-
-app.get("/api/spaces/:sid/rooms/:rid/messages",auth,(req,res)=>{
-  const s=db.spaces[req.params.sid];
-  if(!s || !canSeeSpace(s,req.uid)) return res.status(403).json({error:"このスペースには参加していません"});
-  const r=ensureRoom(s,req.params.rid); if(!r) return res.status(404).json({error:"部屋がありません"});
-  res.json({messages:r.messages});
-});
-
-io.use((socket,next)=>{
-  const token=socket.handshake.auth?.token, uid=token && db.sessions[token];
-  if(!uid) return next(new Error("unauthorized"));
-  socket.uid=uid; next();
-});
-io.on("connection",socket=>{
-  socket.on("joinRoom",({sid,rid})=>{
-    const s=db.spaces[sid]; if(!s || !canSeeSpace(s,socket.uid)) return;
-    socket.join(`${sid}:${rid}`);
-  });
-  socket.on("message",({sid,rid,text})=>{
-    const s=db.spaces[sid]; if(!s || !canSeeSpace(s,socket.uid)) return;
-    const r=ensureRoom(s,rid); if(!r) return;
-    const m={id:id("m"),uid:socket.uid,username:db.users[socket.uid].username,text:String(text||"").slice(0,5000),createdAt:now(),edited:false};
-    r.messages.push(m); save(); io.to(`${sid}:${rid}`).emit("message",m);
-  });
-  socket.on("editMessage",({sid,rid,mid,text})=>{
-    const s=db.spaces[sid]; if(!s || !canSeeSpace(s,socket.uid)) return;
-    const r=ensureRoom(s,rid), m=r?.messages.find(x=>x.id===mid); if(!m) return;
-    if(m.uid!==socket.uid && !db.users[socket.uid].isAdmin) return;
-    m.text=String(text||"").slice(0,5000); m.edited=true; m.editedAt=now(); save();
-    io.to(`${sid}:${rid}`).emit("messageEdited",m);
-  });
-  socket.on("deleteMessage",({sid,rid,mid})=>{
-    const s=db.spaces[sid]; if(!s || !canSeeSpace(s,socket.uid)) return;
-    const r=ensureRoom(s,rid), i=r?.messages.findIndex(x=>x.id===mid); if(i<0) return;
-    if(r.messages[i].uid!==socket.uid && !db.users[socket.uid].isAdmin) return;
-    r.messages.splice(i,1); save(); io.to(`${sid}:${rid}`).emit("messageDeleted",{mid});
-  });
-});
-
-const upload=multer({storage:multer.diskStorage({
-  destination:(_,__,cb)=>cb(null,UPLOADS),
-  filename:(_,file,cb)=>cb(null,id("f")+"_"+file.originalname.replace(/[^a-zA-Z0-9._-]/g,"_"))
-}),limits:{fileSize:10*1024*1024}});
-
-app.post("/api/upload",auth,upload.single("file"),(req,res)=>{
-  if(!req.file) return res.status(400).json({error:"ファイルがありません"});
-  res.json({url:`/uploads/${req.file.filename}`,name:req.file.originalname,size:req.file.size});
-});
-
-app.post("/api/reports",auth,(req,res)=>{
-  const target=String(req.body.target||"");
-  const reason=String(req.body.reason||"").trim();
-  if(!reason) return res.status(400).json({error:"通報理由を入力してください"});
-  const rid=id("rep");
-  db.reports[rid]={id:rid,reporter:req.uid,target,reason,status:"open",createdAt:now()};
-  Object.values(db.users).filter(u=>u.isAdmin).forEach(u=>{
-    db.notifications[u.id] ||= [];
-    db.notifications[u.id].push({id:id("n"),type:"report",reportId:rid,text:"新しい通報があります",createdAt:now(),read:false});
-  });
-  save(); res.json({ok:true});
-});
-
-app.get("/api/admin/dashboard",auth,admin,(req,res)=>{
-  const reports=Object.values(db.reports).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(r=>({
-    ...r,reporter:publicUser(db.users[r.reporter]), targetUser:db.users[r.target]?publicUser(db.users[r.target]):null
-  }));
-  res.json({reports,spaces:Object.values(db.spaces).map(s=>({id:s.id,name:s.name,owner:publicUser(db.users[s.owner]),memberCount:Object.keys(s.members||{}).length}))});
-});
-app.post("/api/admin/reports/:id/resolve",auth,admin,(req,res)=>{
-  const r=db.reports[req.params.id]; if(!r) return res.status(404).json({error:"通報がありません"});
-  r.status="resolved"; r.resolvedBy=req.uid; r.resolvedAt=now(); save(); res.json({ok:true});
-});
-app.get("/api/notifications",auth,(req,res)=>res.json({notifications:db.notifications[req.uid]||[]}));
-app.post("/api/notifications/read",auth,(req,res)=>{
-  (db.notifications[req.uid]||[]).forEach(n=>n.read=true); save(); res.json({ok:true});
-});
-
-server.listen(PORT,"0.0.0.0",()=>console.log(`Luka v2 running on ${PORT}`));
+io.on("connection",socket=>{socket.on("joinRoom",r=>typeof r==="string"&&socket.join(r));socket.on("leaveRoom",r=>typeof r==="string"&&socket.leave(r));socket.on("typing",p=>{if(p?.roomId)socket.to(p.roomId).emit("typing",{roomId:p.roomId,userId:p.userId||null})})});
+server.listen(PORT,"0.0.0.0",()=>console.log("Luka Web v3.0 foundation:",PORT));
