@@ -1,46 +1,41 @@
-# Luka V5 サーバー化版
+# Luka V5.1 — Luka公式 AI 組み込み版
 
-これはV4完全ローカル版を、**同じサーバー上の共有状態 + Socket.IOリアルタイム同期**へ移した最初のサーバー版です。
+V5サーバー版に、**サーバー側のOpenAI API接続**を追加した版です。
 
-## できること
-- PC / iPad / スマホから同じURLへアクセス
-- 同じLukaデータを共有
-- スペース、ルーム、メッセージ、DM、フレンド、通知、通報、管理画面などV4のUIを維持
-- Socket.IOで状態更新を他の接続中ブラウザへ通知
-- そらの管理者権限
-- 通常アカウント作成・切替
-- Luka公式のローカル簡易自動返信
+## 重要
+AIを実際に動かすには、サーバー側に `OPENAI_API_KEY` を環境変数として設定する必要があります。
+**app.jsへAPIキーを書かないでください。**
 
-## ローカル起動
-Node.jsを入れたPCでこのフォルダを開き、
+任意で `LUKA_AI_MODEL` を設定できます。未設定なら `gpt-5-mini` を使用します。
+利用可能なモデル名は、利用しているOpenAI APIアカウントのモデル一覧に合わせて設定してください。
 
-    npm install
-    npm start
+## Renderでの設定
+RenderのLuka Web Service → Environment（環境変数）で、
 
-その後 `http://localhost:3000/` を開きます。
+- Key: `OPENAI_API_KEY`
+- Value: OpenAI APIキー
 
-## Renderへ出す場合
-1. このフォルダの中身をGitHubのLukaリポジトリの `main` に反映
-2. RenderのWeb ServiceでBranchが `main` になっていることを確認
-3. Build Command: `npm install`
-4. Start Command: `npm start`
-5. Deploy
+を追加して保存し、再デプロイします。
 
-## 重要な注意
-このV5は「サーバー化の第一段階」です。
-現在の共有データは `server-data.json` に保存します。Renderの通常のローカルディスクは永続DBではないため、**本番運用の前にPostgreSQLへ移行する必要があります**。
+必要なら、
 
-また、現在は本格的なユーザー認証・パスワード・権限APIではなく、V4のアカウント切替を共有データ上で同期しています。
-したがって、これは「動作確認用のサーバー版」であり、公開サービスとして安全に運用する完成版ではありません。
+- Key: `LUKA_AI_MODEL`
+- Value: 利用するモデル名
 
-## 次
-V5の動作確認後に、
-- PostgreSQL / Supabase
-- 本物のログイン・セッション
-- bcrypt/Argon2等のパスワードハッシュ
-- APIごとの権限チェック
-- 永続ファイルストレージ
-- Luka公式のAI API接続
-- WebRTC + TURN
-- rate limit / CSRF / セキュリティ強化
-へ移行します。
+も設定します。
+
+APIキーはGitHubへコミットしないでください。
+
+## 動作
+ユーザーが「Luka公式」にDMを送る
+→ `/api/luka-ai`
+→ Lukaサーバー
+→ OpenAI Responses API
+→ Luka公式として返信
+
+AI APIが未設定・一時的に失敗した場合は、既存のローカル簡易返信へフォールバックします。
+
+## 現段階の注意
+これはまだ本番公開の完成版ではありません。
+認証・レート制限・DB・永続ファイル保存などは次段階で強化します。
+AI利用にはAPI料金が発生する場合があるため、公開前に利用上限や安全対策を追加してください。

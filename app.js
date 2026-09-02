@@ -138,8 +138,33 @@ function sendDM(text){
   const m={id:uid("m"),kind:"dm",dmId:d.id,author:me().id,text,createdAt:Date.now(),edited:false,deleted:false,reactions:{}};
   state.messages.push(m);
   save(); render();
-  if(target==="luka_official") setTimeout(()=>lukaReply(text,d.id),300);
+  if(target==="luka_official") requestLukaAI(text,d.id);
 }
+async function requestLukaAI(text,dmId){
+  try{
+    const r=await fetch("/api/luka-ai",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        message:text,
+        conversation:dmMessages(dmId).slice(-12).map(m=>({role:m.author==="luka_official"?"assistant":"user",content:m.text}))
+      })
+    });
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error||"AI request failed");
+    state.messages.push({
+      id:uid("m"),kind:"dm",dmId,author:"luka_official",
+      text:data.reply,createdAt:Date.now(),edited:false,deleted:false,reactions:{}
+    });
+    addNotification(me().id,"Luka公式から返信が届きました","dm");
+    save(); render();
+  }catch(e){
+    console.error(e);
+    // Server/AI is unavailable: keep the local fallback so the DM still works.
+    setTimeout(()=>lukaReply(text,dmId),150);
+  }
+}
+
 function lukaReply(text,dmId){
   const t=text.toLowerCase();
   let reply="こんにちは！Luka公式だよ。何か手伝えることがあれば教えてね！";

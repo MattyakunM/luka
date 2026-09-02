@@ -1,12 +1,13 @@
 {
-  "name": "luka-v5-server",
-  "version": "5.0.0",
+  "name": "luka-v5-ai",
+  "version": "5.1.0",
   "private": true,
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.21.2",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "openai": "^5.0.0"
   }
 }
