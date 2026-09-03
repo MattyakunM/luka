@@ -65,3 +65,7 @@ Render環境変数:
 
 ## V7.0
 Server-side message API, Socket.IO broadcasts, notifications, and a client realtime bridge were added on top of V6.2.
+
+
+## V9 DB
+Supabase DB adapter and social/DM migration are included. See `V9_DB_IMPLEMENTATION.md` and `schema_v9.sql`.
