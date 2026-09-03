@@ -1,0 +1,25 @@
+{
+  "name": "Luka Design System",
+  "version": "1.0",
+  "principles": [
+    "Luka公式マークとユーザー画像を分離",
+    "未来感のある宇宙テーマ",
+    "機能ごとに意味が分かるアイコン"
+  ],
+  "statuses": [
+    "online",
+    "away",
+    "busy",
+    "invisible",
+    "custom",
+    "voice",
+    "muted",
+    "headset",
+    "screen_share",
+    "streaming"
+  ],
+  "identity": {
+    "display_name": true,
+    "username": true
+  }
+}

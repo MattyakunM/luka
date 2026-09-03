@@ -1,0 +1,19 @@
+{
+  "version": "6.0.0",
+  "brand": {
+    "name": "Luka",
+    "theme": "Luka Blue",
+    "colors": [
+      "#6C5CE7",
+      "#00D4FF",
+      "#111827"
+    ]
+  },
+  "features": {
+    "deviceSecurity": true,
+    "botSystem": true,
+    "roles": true,
+    "aiSummaryReady": true,
+    "supabaseReady": true
+  }
+}

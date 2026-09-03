@@ -89,7 +89,18 @@ function normalize(x){
   x.accounts ||= []; x.friends ||= []; x.friendRequests ||= []; x.blocks ||= [];
   x.dms ||= []; x.messages ||= []; x.spaces ||= []; x.notifications ||= [];
   x.reports ||= []; x.pinned ||= []; x.settings ||= {theme:"system",notifications:true};
-  x.spaces.forEach(s=>{s.members ||= []; s.rooms ||= [];});
+  x.spaces.forEach(s=>{
+  s.members ||= []; s.rooms ||= [];
+  s.visibility ||= (s.inviteOnly ? "private" : "public");
+  s.roles ||= [
+    {id:"role_owner",name:"Owner",color:"#6C5CE7",permissions:["manage_space","manage_roles","manage_bots","manage_members"]},
+    {id:"role_member",name:"Member",color:"#64748B",permissions:["read","send","react"]}
+  ];
+  s.botIds ||= [];
+  s.category ||= "その他";
+});
+x.bots ||= [];
+x.deviceBindings ||= {};
   return x;
 }
 function me(){return state.accounts.find(a=>a.id===state.userId)||state.accounts[0]}
@@ -186,8 +197,10 @@ function render(){
       ${nav("friends","フレンド","👥")}
       ${nav("dm","DM","💬")}
       ${nav("spaces","スペース","▣")}
+      ${nav("community","Community Hub","◌")}
+      ${nav("bots","Bot","◇")}
       ${nav("notifications","通知","🔔")}
-      ${isAdmin()?nav("admin","管理者","👑","admin"): ""}
+      ${isAdmin()?nav("admin","管理者","👑","admin"): ""}${isAdmin()?nav("security","Security","⬡","admin"): ""}
       ${nav("settings","設定","⚙")}
       <div class="userbox">
         <b>${esc(user.name)}</b><div class="muted">@${esc(user.handle||user.id)}</div>
@@ -201,7 +214,11 @@ function render(){
   </div>`;
 }
 function nav(id,label,icon,cls=""){return `<button class="nav ${cls} ${window.page===id?"active":""}" onclick="view('${id}')">${icon} ${label}</button>`}
-function pageTitle(){return ({home:"ホーム",profile:"プロフィール",users:"ユーザー",friends:"フレンド",dm:"ダイレクトメッセージ",spaces:"スペース",notifications:"通知",admin:"管理者",settings:"設定"}[window.page||"home"]||"ホーム")}
+function pageTitle(){return ({
+  home:"ホーム",profile:"プロフィール",users:"ユーザー",friends:"フレンド",
+  dm:"ダイレクトメッセージ",spaces:"スペース",community:"Community Hub",
+  bots:"Bot",notifications:"通知",admin:"管理者",security:"Security",roles:"ロール",settings:"設定",security:"Security"
+}[window.page||"home"]||"ホーム")}
 function view(p){window.page=p;render()}
 
 function pageHTML(){
@@ -211,8 +228,12 @@ function pageHTML(){
     case "friends":return friendsPage();
     case "dm":return dmPage();
     case "spaces":return spacesPage();
+    case "community":return communityHubPage();
+    case "bots":return botsPage();
+    case "roles":return rolesPage();
     case "notifications":return notificationsPage();
     case "admin":return isAdmin()?adminPage():"<div class='card'>管理者権限が必要です。</div>";
+    case "security":return securityPage();
     case "settings":return settingsPage();
     default:return homePage();
   }
@@ -223,9 +244,28 @@ function homePage(){
   return `<div class="card"><h1>ようこそ、${esc(me().name)}！</h1><p>Lukaのローカル完全版です。</p><div class="grid"><div class="card"><div class="kpi">${state.spaces.length}</div>スペース</div><div class="card"><div class="kpi">${state.accounts.length}</div>アカウント</div><div class="card"><div class="kpi">${unread}</div>未読通知</div></div></div><div class="card"><h2>公式アカウント</h2><div class="list">${official}</div></div>`;
 }
 function profilePage(){
-  return `<div class="card"><h2>プロフィール</h2><label>表示名<input id="pName" value="${esc(me().name)}"></label><label>自己紹介<textarea id="pBio">${esc(me().bio||"")}</textarea></label><button class="primary" onclick="saveProfile()">保存</button></div>`;
+  const u=me();
+  return `<div class="card"><h2>プロフィール</h2>
+    <label>表示名<input id="pName" value="${esc(u.name)}"></label>
+    <label>ユーザーネーム<input id="pHandle" value="${esc(u.handle||"")}" placeholder="英数字・_"></label>
+    <label>自己紹介<textarea id="pBio">${esc(u.bio||"")}</textarea></label>
+    <label>ステータス<select id="pStatus">
+      ${["online","away","busy","invisible","custom"].map(x=>`<option value="${x}" ${(u.status||"online")===x?"selected":""}>${statusLabel(x)}</option>`).join("")}
+    </select></label>
+    <label>カスタムステータス<input id="pCustom" value="${esc(u.customStatus||"")}" placeholder="例：歌ってみた制作中"></label>
+    <button class="primary" onclick="saveProfile()">保存</button></div>`;
 }
-function saveProfile(){me().name=document.getElementById("pName").value.trim()||me().name;me().bio=document.getElementById("pBio").value;save();render();toast("保存しました")}
+function statusLabel(x){return ({online:"オンライン",away:"離席中",busy:"取り込み中",invisible:"非表示",custom:"カスタム"}[x]||x)}
+function saveProfile(){
+  const u=me();
+  const h=document.getElementById("pHandle").value.trim().replace(/^@/,"");
+  if(h && !/^[A-Za-z0-9_\.\-]{2,32}$/.test(h)){toast("ユーザーネームは英数字・_・-・.を2〜32文字で入力してください");return}
+  if(h && state.accounts.some(a=>a.id!==u.id && a.handle===h)){toast("そのユーザーネームは使用されています");return}
+  u.name=document.getElementById("pName").value.trim()||u.name;
+  u.handle=h||u.handle; u.bio=document.getElementById("pBio").value;
+  u.status=document.getElementById("pStatus").value; u.customStatus=document.getElementById("pCustom").value.trim();
+  save();render();toast("プロフィールを保存しました");
+}
 function usersPage(){
   const q=window.userQuery||"";
   const list=state.accounts.filter(a=>a.id!==me().id && (a.name.includes(q)||a.handle.includes(q)));
@@ -261,14 +301,22 @@ function spacesPage(){
   const s=spaceObj(),r=roomObj(),msgs=state.messages.filter(m=>m.kind==="room"&&m.spaceId===s?.id&&m.roomId===r?.id).sort((a,b)=>a.createdAt-b.createdAt);
   const spaces=state.spaces.map(x=>`<button class="${x.id===s?.id?"primary":""}" onclick="selectSpace('${x.id}')">${esc(x.name)}</button>`).join("");
   const rooms=s?s.rooms.map(x=>`<button class="${x.id===r?.id?"primary":""}" onclick="selectRoom('${x.id}')">${esc(x.name)}</button>`).join(""):"";
-  const body=s?`<div class="card"><div class="row" style="justify-content:space-between"><b>${esc(s.name)} / ${esc(r?.name||"")}</b><div><button onclick="createRoom()">＋部屋</button>${isAdmin()||s.owner===me().id?`<button class="danger" onclick="deleteSpace('${s.id}')">スペース削除</button>`:""}</div></div><div class="row" style="margin-top:10px">${rooms}${r&&r.name!=="ロビー"&&(isAdmin()||s.owner===me().id)?`<button class="danger" onclick="deleteRoom('${s.id}','${r.id}')">部屋を削除</button>`:""}</div></div><div class="card" style="padding:0;overflow:hidden"><div class="messages"><div class="message-list">${msgs.map(renderMessage).join("")}</div><div class="composer"><textarea id="roomText" placeholder="メッセージを入力" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendRoomFromBox()}"></textarea><button class="primary" onclick="sendRoomFromBox()">送信</button></div></div></div>`:"";
-  return `<div class="row" style="justify-content:space-between"><h2>スペース</h2><button class="primary" onclick="createSpace()">＋スペース</button></div><div class="card"><div class="row">${spaces}</div></div>${body}`;
+  const body=s?`<div class="card"><div class="row" style="justify-content:space-between"><b>${esc(s.name)} / ${esc(r?.name||"")}</b><div><button onclick="createRoom()">＋部屋</button><button onclick="view('bots')">Bot</button>${currentSpaceCanManage(s)?`<button onclick="view('roles')">ロール</button>`:""}${isAdmin()||s.owner===me().id?`<button class="danger" onclick="deleteSpace('${s.id}')">スペース削除</button>`:""}</div></div><div class="row" style="margin-top:10px">${rooms}${r&&r.name!=="ロビー"&&(isAdmin()||s.owner===me().id)?`<button class="danger" onclick="deleteRoom('${s.id}','${r.id}')">部屋を削除</button>`:""}</div></div><div class="card" style="padding:0;overflow:hidden"><div class="messages"><div class="message-list">${msgs.map(renderMessage).join("")}</div><div class="composer"><textarea id="roomText" placeholder="メッセージを入力" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendRoomFromBox()}"></textarea><button class="primary" onclick="sendRoomFromBox()">送信</button></div></div></div>`:"";
+  return `<div class="row" style="justify-content:space-between"><h2>スペース</h2><div class="row"><button onclick="view('community')">Community Hub</button><button class="primary" onclick="createSpace()">＋スペース</button></div></div><div class="card"><div class="row">${spaces}</div></div>${body}`;
 }
 function selectSpace(id){state.activeSpace=id;const s=spaceObj();state.activeRoom=s?.rooms[0]?.id;save();render()}
 function selectRoom(id){state.activeRoom=id;save();render()}
 function createSpace(){
-  openModal("スペースを作成",`<label>名前<input id="xName" placeholder="例：ゲーム部"></label><label><input id="xInvite" type="checkbox"> 招待制にする</label><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">キャンセル</button><button class="primary" id="ok">作成</button></div>`,m=>{
-    m.querySelector("#ok").onclick=()=>{const name=m.querySelector("#xName").value.trim();if(!name){toast("名前を入力");return}const s={id:uid("sp"),name,owner:me().id,inviteOnly:m.querySelector("#xInvite").checked,members:[me().id],rooms:[{id:uid("room"),name:"ロビー"}]};state.spaces.push(s);state.activeSpace=s.id;state.activeRoom=s.rooms[0].id;save();closeModal();render()};
+  openModal("スペースを作成",`<label>名前<input id="xName" placeholder="例：ゲーム部"></label>
+    <label>カテゴリー<select id="xCategory"><option>ゲーム</option><option>音楽</option><option>勉強</option><option>創作</option><option>雑談</option><option>その他</option></select></label>
+    <label><input id="xInvite" type="checkbox"> 招待制にする</label><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">キャンセル</button><button class="primary" id="ok">作成</button></div>`,m=>{
+    m.querySelector("#ok").onclick=()=>{const name=m.querySelector("#xName").value.trim();if(!name){toast("名前を入力");return}const invite=m.querySelector("#xInvite").checked;
+      const category=m.querySelector("#xCategory").value;
+      const s={id:uid("sp"),name,owner:me().id,inviteOnly:invite,visibility:invite?"private":"public",category,
+        members:[me().id],roles:[
+          {id:uid("role"),name:"Owner",color:"#6C5CE7",permissions:["manage_space","manage_roles","manage_bots","manage_members"]},
+          {id:uid("role"),name:"Member",color:"#64748B",permissions:["read","send","react"]}
+        ],botIds:[],rooms:[{id:uid("room"),name:"ロビー"}]};state.spaces.push(s);state.activeSpace=s.id;state.activeRoom=s.rooms[0].id;save();closeModal();render()};
   });
 }
 function createRoom(){
@@ -364,6 +412,115 @@ function resolveReport(id){const r=state.reports.find(x=>x.id===id);if(r)r.resol
 function reportUser(id){
   openModal("通報",`<label>理由<select id="rr"><option>迷惑行為</option><option>不適切な投稿</option><option>その他</option></select></label><label>内容<textarea id="rt"></textarea></label><div class="row" style="justify-content:flex-end"><button onclick="closeModal()">キャンセル</button><button class="danger" id="ok">通報する</button></div>`,m=>m.querySelector("#ok").onclick=()=>{state.reports.push({id:uid("rep"),from:me().id,target:id,reason:m.querySelector("#rr").value,text:m.querySelector("#rt").value,resolved:false,createdAt:new Date().toISOString()});addNotification("sora",`${me().name}から通報が届きました`,"report");save();closeModal();toast("通報しました")});
 }
+
+function communityHubPage(){
+  const q=(window.communityQuery||"").toLowerCase();
+  const list=state.spaces.filter(s=>s.visibility!=="private" && (!q || s.name.toLowerCase().includes(q) || String(s.category||"").toLowerCase().includes(q)));
+  const cards=list.map(s=>{
+    const joined=s.members.includes(me().id);
+    return `<div class="item">
+      <div class="row" style="justify-content:space-between">
+        <div><b>${esc(s.name)}</b> <span class="badge">${esc(s.category||"その他")}</span></div>
+        <span class="muted">${s.members.length}人</span>
+      </div>
+      <div class="muted">公開コミュニティ</div>
+      <div class="row" style="margin-top:8px">${joined?`<button onclick="selectSpace('${s.id}');view('spaces')">開く</button>`:`<button class="primary" onclick="joinPublicSpace('${s.id}')">参加する</button>`}</div>
+    </div>`;
+  }).join("");
+  return `<div class="card"><h2>Community Hub</h2>
+    <p class="muted">Lukaの中から公開コミュニティを探して参加できます。</p>
+    <input value="${esc(window.communityQuery||"")}" placeholder="コミュニティ名・カテゴリーを検索" oninput="window.communityQuery=this.value;render()">
+    <div class="list" style="margin-top:12px">${cards||"<div class='muted'>見つかりませんでした。</div>"}</div>
+  </div>`;
+}
+function joinPublicSpace(id){
+  const s=state.spaces.find(x=>x.id===id); if(!s)return;
+  if(s.visibility==="private"){toast("このスペースは招待制です");return}
+  if(!s.members.includes(me().id)) s.members.push(me().id);
+  state.activeSpace=id; state.activeRoom=s.rooms[0]?.id; save(); render(); toast("コミュニティに参加しました");
+}
+
+function currentSpaceCanManage(s=spaceObj()){
+  return !!s && (isAdmin() || s.owner===me().id);
+}
+function botsPage(){
+  const s=spaceObj();
+  const installed=(state.bots||[]).filter(b=>s?.botIds?.includes(b.id));
+  const catalog=[
+    {id:"read",name:"Luka Read",desc:"テキストを読み上げるBot。ブラウザの音声機能を利用します。",icon:"◖◗"},
+    {id:"poll",name:"Luka Poll",desc:"チャットで簡単な投票を作成します。",icon:"◇"},
+    {id:"reminder",name:"Luka Reminder",desc:"このブラウザでリマインダーを管理します。",icon:"◷"},
+    {id:"guard",name:"Luka Guard",desc:"通報・モデレーションを補助するBotです。",icon:"⬡"},
+    {id:"ai",name:"Luka AI Bot",desc:"Luka AIをスペース内で呼び出すためのBotです。",icon:"◎"}
+  ];
+  return `<div class="card"><h2>Bot Center</h2><p class="muted">現在のスペース：${esc(s?.name||"なし")}</p>
+    <div class="grid">${catalog.map(b=>{
+      const on=installed.some(x=>x.id===b.id);
+      return `<div class="card"><div style="font-size:28px">${b.icon}</div><h3>${esc(b.name)}</h3><p>${esc(b.desc)}</p>
+      <button class="${on?"danger":"primary"}" onclick="toggleBot('${b.id}')">${on?"削除":"追加"}</button></div>`;
+    }).join("")}</div></div>`;
+}
+function toggleBot(id){
+  const s=spaceObj(); if(!currentSpaceCanManage(s)){toast("スペース管理権限が必要です");return}
+  s.botIds ||= [];
+  state.bots ||= [];
+  const defs={read:["Luka Read","読み上げ"],poll:["Luka Poll","投票"],reminder:["Luka Reminder","リマインダー"],guard:["Luka Guard","管理補助"],ai:["Luka AI Bot","AI"]};
+  const [name,desc]=defs[id]||[id,id];
+  const i=s.botIds.indexOf(id);
+  if(i>=0){s.botIds.splice(i,1);state.bots=state.bots.filter(b=>!(b.id===id&&b.spaceId===s.id));toast("Botを削除しました")}
+  else {s.botIds.push(id);state.bots.push({id,spaceId:s.id,name,description:desc,enabled:true});toast("Botを追加しました")}
+  save();render();
+}
+
+function rolesPage(){
+  const s=spaceObj();
+  if(!s)return `<div class="card">スペースがありません。</div>`;
+  if(!currentSpaceCanManage(s))return `<div class="card">スペース管理者のみロールを管理できます。</div>`;
+  s.roles ||= [];
+  const rows=s.roles.map(r=>`<div class="item row" style="justify-content:space-between">
+    <div><span class="badge" style="border-color:${esc(r.color||"#64748B")}">${esc(r.name)}</span><div class="muted">${(r.permissions||[]).join("・")}</div></div>
+    ${r.name==="Owner"?"":`<button class="danger" onclick="deleteRole('${r.id}')">削除</button>`}
+  </div>`).join("");
+  return `<div class="card"><h2>ロール</h2>${rows}<button class="primary" onclick="createRole()">＋ロールを作成</button></div>`;
+}
+function createRole(){
+  const s=spaceObj(); if(!currentSpaceCanManage(s))return;
+  openModal("ロールを作成",`<label>名前<input id="roleName" placeholder="例：歌い手"></label>
+  <label>色<input id="roleColor" type="text" value="#00D4FF"></label>
+  <label>権限（カンマ区切り）<input id="rolePerms" value="read,send,react"></label>
+  <div class="row" style="justify-content:flex-end"><button onclick="closeModal()">キャンセル</button><button class="primary" id="roleOk">作成</button></div>`,m=>{
+    m.querySelector("#roleOk").onclick=()=>{
+      const n=m.querySelector("#roleName").value.trim(); if(!n){toast("名前を入力してください");return}
+      s.roles.push({id:uid("role"),name:n,color:m.querySelector("#roleColor").value.trim()||"#00D4FF",permissions:m.querySelector("#rolePerms").value.split(",").map(x=>x.trim()).filter(Boolean)});
+      save();closeModal();render();toast("ロールを作成しました");
+    };
+  });
+}
+function deleteRole(id){
+  const s=spaceObj(); if(!currentSpaceCanManage(s))return;
+  s.roles=s.roles.filter(r=>r.id!==id); save();render();toast("ロールを削除しました");
+}
+function securityPage(){
+  return `<div class="card"><h2>Security Center</h2>
+    <p class="muted">端末・セッション保護の現在の状態</p>
+    <div class="grid">
+      <div class="card"><div class="kpi">${esc(getDeviceId().slice(0,8))}</div>このブラウザの端末ID</div>
+      <div class="card"><div class="kpi">${state.accounts.filter(a=>a.suspended).length}</div>停止中アカウント</div>
+    </div>
+    <button onclick="logoutLocal()">この端末からログアウト</button>
+    <p class="muted" style="margin-top:10px">※端末IDはブラウザ上の識別子です。ブラウザのデータ削除や別端末を完全には識別できないため、本番公開時はサーバー側の認証・DB制御が必要です。</p>
+  </div>`;
+}
+function getDeviceId(){
+  let id=localStorage.getItem("luka_device_id");
+  if(!id){id="dev_"+crypto.randomUUID();localStorage.setItem("luka_device_id",id)}
+  return id;
+}
+function logoutLocal(){
+  localStorage.removeItem(DEVICE_KEY); localStorage.removeItem("luka_active_user");
+  state.userId="sora"; localStorage.setItem(DEVICE_KEY,"sora"); render(); toast("そらに戻りました");
+}
+
 function settingsPage(){
   return `<div class="card"><h2>設定</h2><label>表示<input value="${esc(state.settings.theme)}" disabled></label><label><input type="checkbox" id="notifySet" ${state.settings.notifications?"checked":""}> 通知を有効にする</label><button class="primary" onclick="saveSettings()">保存</button></div>
   <div class="card"><h2>データ</h2><button onclick="exportBackup()">バックアップ書き出し</button> <button onclick="importBackup()">バックアップ復元</button><button class="danger" onclick="resetLocal()">ローカルデータを初期化</button></div>`;
@@ -377,6 +534,10 @@ function importBackup(){
 }
 function resetLocal(){if(!confirm("このブラウザのLukaデータを初期化します。よろしいですか？"))return;localStorage.removeItem(KEY);localStorage.removeItem(DEVICE_KEY);location.reload()}
 
+window.communityHubPage=communityHubPage;window.joinPublicSpace=joinPublicSpace;
+window.botsPage=botsPage;window.toggleBot=toggleBot;window.rolesPage=rolesPage;
+window.createRole=createRole;window.deleteRole=deleteRole;window.securityPage=securityPage;
+window.logoutLocal=logoutLocal;window.getDeviceId=getDeviceId;
 window.view=view;window.closeModal=closeModal;window.accountSwitch=accountSwitch;window.openDM=openDM;
 window.sendDMFromBox=sendDMFromBox;window.saveProfile=saveProfile;window.sendFriend=sendFriend;window.acceptFriend=acceptFriend;window.rejectFriend=rejectFriend;
 window.selectSpace=selectSpace;window.selectRoom=selectRoom;window.createSpace=createSpace;window.createRoom=createRoom;window.deleteSpace=deleteSpace;window.deleteRoom=deleteRoom;window.sendRoomFromBox=sendRoomFromBox;
