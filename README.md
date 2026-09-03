@@ -61,3 +61,7 @@ Render環境変数:
 - 本番公開時はSupabase側でdevice_bindingsをサーバー権限で管理し、認証と組み合わせて強制してください。
 - Community Hubは現在のサーバーJSON/local stateを使う統合版です。本番ではDB検索に移行します。
 - Bot CenterはBotの追加・削除・設定を実際に保存できます。各Botの高度な外部連携は次段階で実装します。
+
+
+## V7.0
+Server-side message API, Socket.IO broadcasts, notifications, and a client realtime bridge were added on top of V6.2.

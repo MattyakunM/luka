@@ -1,6 +1,6 @@
 {
-  "name": "luka-v6-ultimate",
-  "version": "6.2.0",
+  "name": "luka-v7-complete",
+  "version": "7.0.0",
   "private": true,
   "scripts": {
     "start": "node server.js"
