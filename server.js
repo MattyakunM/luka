@@ -4,16 +4,11 @@ const path = require("path");
 const fs = require("fs");
 const { Server } = require("socket.io");
 const OpenAI = require("openai");
-const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 const PORT = process.env.PORT || 3000;
-
-const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_KEY)
-  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
-  : null;
 
 app.use(express.json({limit:"12mb"}));
 app.use(express.static(__dirname));
@@ -42,12 +37,12 @@ function sanitize(data){
 
 app.get("/",(req,res)=>res.sendFile(path.join(__dirname,"index.html")));
 app.get("/api/health",(req,res)=>res.json({
-  ok:true,service:"Luka",version:"6.2.0",mode:"server-json-ai",
+  ok:true,service:"Luka",version:"5.1.0",mode:"server-json-ai",
   database:"server-data.json",realtime:true,ai:!!process.env.OPENAI_API_KEY,
   timestamp:new Date().toISOString()
 }));
 app.get("/api/config",(req,res)=>res.json({
-  serviceName:"Luka",stage:"v6.2",
+  serviceName:"Luka",stage:"v5-ai",
   features:{sharedState:true,realtimeSocket:true,database:false,ai:!!process.env.OPENAI_API_KEY,webrtc:false}
 }));
 
@@ -117,24 +112,3 @@ io.on("connection",(socket)=>{
 });
 
 server.listen(PORT,"0.0.0.0",()=>console.log(`Luka V5.1 AI listening on ${PORT}`));
-
-
-// Luka V6 status
-app.get("/api/v6/status",(req,res)=>{
-  res.json({
-    version:"6.0.0",
-    supabase:Boolean(supabase),
-    features:{
-      deviceSecurity:true,
-      botSystem:true,
-      roles:true
-    }
-  });
-});
-
-// Device security foundation
-app.post("/api/device/check",(req,res)=>{
-  const deviceId=String(req.body?.deviceId||"");
-  if(!deviceId) return res.status(400).json({allowed:false});
-  res.json({allowed:true,deviceId});
-});

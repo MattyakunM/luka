@@ -1,6 +1,6 @@
 {
-  "name": "luka-v9-db-integrated",
-  "version": "9.0.0",
+  "name": "luka-v5.2",
+  "version": "5.2.0",
   "private": true,
   "scripts": {
     "start": "node server.js"
@@ -8,8 +8,7 @@
   "dependencies": {
     "express": "^4.21.2",
     "socket.io": "^4.8.1",
-    "openai": "^5.0.0",
-    "@supabase/supabase-js": "^2.0.0"
+    "openai": "^5.0.0"
   },
-  "description": "Luka V6 Ultimate Base - UI, security, bot and DB ready foundation"
+  "description": "Luka V5 server + AI + admin-only update feed"
 }

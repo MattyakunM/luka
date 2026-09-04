@@ -1,0 +1,3 @@
+-- Luka V9 database rebuild starter
+-- Supabase schema should be merged with the verified existing schema.
+-- Keep profiles.id compatible with Luka user IDs (text).
