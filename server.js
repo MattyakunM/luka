@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const { Server } = require("socket.io");
 const OpenAI = require("openai");
+const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 const server = http.createServer(app);
@@ -36,9 +37,28 @@ function sanitize(data){
 }
 
 app.get("/",(req,res)=>res.sendFile(path.join(__dirname,"index.html")));
+const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_KEY)
+  ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
+  : null;
+
+app.get("/api/db/status", (req,res)=>{
+  res.json({
+    ok:true,
+    driver: supabase ? "supabase" : "json-dev",
+    production: !!supabase
+  });
+});
+
+app.get("/api/db/profiles", async (req,res)=>{
+  if(!supabase) return res.json({ok:false,error:"Supabase not configured"});
+  const { data, error } = await supabase.from("profiles").select("*").limit(20);
+  if(error) return res.status(500).json({ok:false,error:error.message});
+  res.json({ok:true,data});
+});
+
 app.get("/api/health",(req,res)=>res.json({
-  ok:true,service:"Luka",version:"5.1.0",mode:"server-json-ai",
-  database:"server-data.json",realtime:true,ai:!!process.env.OPENAI_API_KEY,
+  ok:true,service:"Luka",version:"9.0.0",mode:"supabase-ready",
+  database:supabase ? "supabase" : "server-data.json",realtime:true,ai:!!process.env.OPENAI_API_KEY,
   timestamp:new Date().toISOString()
 }));
 app.get("/api/config",(req,res)=>res.json({
@@ -111,4 +131,4 @@ io.on("connection",(socket)=>{
   socket.on("pingLuka",()=>socket.emit("pongLuka"));
 });
 
-server.listen(PORT,"0.0.0.0",()=>console.log(`Luka V5.1 AI listening on ${PORT}`));
+server.listen(PORT,"0.0.0.0",()=>console.log(`Luka V9 DB listening on ${PORT}`));

@@ -1,0 +1,1 @@
+Luka V9 DB integrated rebuild. Add SUPABASE_URL and SUPABASE_KEY in Render Environment Variables. Run npm install during deploy.
