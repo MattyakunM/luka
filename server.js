@@ -11,11 +11,13 @@ const io=new Server(server,{cors:{origin:true,credentials:true}});
 const PORT=process.env.PORT||3000;
 const supabase=process.env.SUPABASE_URL&&process.env.SUPABASE_KEY?createClient(process.env.SUPABASE_URL,process.env.SUPABASE_KEY):null;
 app.use(express.json({limit:'15mb'}));
-app.use(express.static(__dirname));
-app.use('/app',express.static(path.join(__dirname,'app')));
+// Explicit app routes come before static middleware so Render never falls into a directory redirect.
 app.get('/',(req,res)=>res.sendFile(path.join(__dirname,'index.html')));
 app.get('/app',(req,res)=>res.sendFile(path.join(__dirname,'app','index.html')));
 app.get('/app/',(req,res)=>res.sendFile(path.join(__dirname,'app','index.html')));
+app.get('/app/index.html',(req,res)=>res.sendFile(path.join(__dirname,'app','index.html')));
+app.use(express.static(__dirname));
+app.use('/app',express.static(path.join(__dirname,'app')));
 app.get('/api/config',(req,res)=>res.json({serviceName:'Luka',version:'11.0.0',supabase:{enabled:!!supabase,url:process.env.SUPABASE_URL||null,publishableKey:process.env.SUPABASE_KEY||null},features:{auth:!!supabase,database:!!supabase,realtime:!!supabase,storage:!!supabase,ai:!!process.env.OPENAI_API_KEY,webrtc:true}}));
 app.get('/api/health',async(req,res)=>res.json({ok:true,service:'Luka',version:'11.0.0',database:supabase?'supabase':'not-configured',realtime:!!supabase,storage:!!supabase,ai:!!process.env.OPENAI_API_KEY,timestamp:new Date().toISOString()}));
 app.get('/api/db/status',async(req,res)=>{if(!supabase)return res.json({ok:true,driver:'not-configured',production:false});const {error}=await supabase.from('profiles').select('id').limit(1);res.json({ok:!error,driver:'supabase',production:true,error:error?.message||null});});
