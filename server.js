@@ -37,6 +37,7 @@ function sanitize(data){
 }
 
 app.get("/",(req,res)=>res.sendFile(path.join(__dirname,"index.html")));
+app.get("/app",(req,res)=>res.sendFile(path.join(__dirname,"index.html")));
 const supabase = (process.env.SUPABASE_URL && process.env.SUPABASE_KEY)
   ? createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
   : null;
