@@ -1,21 +1,25 @@
-# Luka V5.2 統合版
+# Luka V10 Complete
 
-## 今回の統合
-- Luka公式AIのサーバー接続
-- Luka管理者AI（管理者「そら」専用UI）
-- Luka Update（投稿UIは管理者のみ）
-- AI接続状態確認
-- 既存のV5チャット/DM/スペース/管理機能を維持
+This build is a real, connected browser implementation rather than a UI mock.
 
-## Render
-Environment Variables:
-- `OPENAI_API_KEY` = OpenAI API key
-- `LUKA_AI_MODEL` = `gpt-5-mini`（任意）
+## Run
+1. `npm install`
+2. `npm start`
+3. Open `http://localhost:3000`
 
-API:
-- `/api/luka-ai/status`
-- `/api/luka-admin-ai`
+## Supabase
+Set:
+- `SUPABASE_URL`
+- `SUPABASE_KEY` (publishable/anon key)
 
-重要:
-- APIキーはGitHubやフロントエンドコードに書かない。
-- V5.2の管理者UI制御はクライアント側。公開運用前にはDBセッションによるサーバー側admin認証が必要。
+Run `supabase_schema_v10.sql` in Supabase SQL Editor, then enable email auth.
+
+## AI
+Set `OPENAI_API_KEY` on the server. Never put this secret in frontend code.
+
+## Download
+The official landing page has a working source-bundle download endpoint:
+`/api/download/source`
+
+## Important
+WebRTC UI capability is reserved in the architecture, but a full production call signaling/ICE service still needs to be deployed and tested; this build does not pretend that a non-existent call backend is finished.
