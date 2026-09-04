@@ -1,14 +1,19 @@
-# Luka V11.0.1 Verification
+# Luka V11 verification
 
-This package was checked before delivery.
+Verified locally before packaging:
+- server.js: Node syntax check passed
+- app/app.js: Node syntax check passed
+- landing page exists
+- app page exists
+- explicit `/app`, `/app/`, and `/app/index.html` routes are registered before static middleware
+- API health/config/db/AI/download routes are present
+- Supabase schema is included
+- source download bundle is included
+- ZIP integrity check passed after packaging
 
-- Node syntax: `server.js`, `app.js`, `app/app.js` pass `node --check`.
-- Landing page exists and links to `/app/`.
-- Server explicitly handles `/app`, `/app/`, and `/app/index.html` before static middleware.
-- App navigation includes Settings.
-- Supabase schema uses UUID consistently for auth-linked IDs.
-- Required tables for profiles, spaces, rooms, messages, reactions, friendships, DMs and bots are present.
-- Nested web-source ZIP passes ZIP integrity testing.
-- Bot Center Add buttons now write to `space_bots` in Supabase.
-
-Important production note: browser WebRTC peer-to-peer calling is implemented with STUN. A TURN service is still required for reliable calls across restrictive NAT/firewall networks. No software-only test can guarantee that every real-world network will work.
+Important production setup:
+1. Use a fresh Supabase project, or migrate old Luka tables to the V11 UUID schema.
+2. Set `SUPABASE_URL` and either `SUPABASE_ANON_KEY` (preferred) or `SUPABASE_KEY` to a publishable/anon key.
+3. Never put a `service_role` key into either variable. V11 detects and refuses to expose service-role keys to the browser.
+4. Set `OPENAI_API_KEY` only on Render/server if Luka AI is wanted.
+5. Run `supabase_schema_v11.sql` before using database features.

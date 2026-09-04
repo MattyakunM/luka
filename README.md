@@ -1,41 +1,37 @@
-# Luka V11.0.1 — Verified Web Build
+# Luka V11 — Complete Web Build
 
 Luka is a browser-first communication workspace with a bilingual landing page and app.
 
 ## Included
-- Japanese / English landing and app UI
+- Japanese / English UI
 - Supabase Auth (email/password)
 - Profiles, usernames, status, avatars
-- Public/private spaces and rooms
-- Realtime message subscription
-- Replies, edit/delete and reactions
+- Public/private spaces, rooms, owner settings
+- Realtime messages, replies, edit/delete, reactions
 - Custom reaction image upload
 - Space icon/banner upload
 - Community Hub and join flow
-- Friend requests and 1:1 DM data model/UI
+- Friend requests and 1:1 DM data model
 - Luka AI server endpoint
-- Bot Center with real `space_bots` insertion and commands
-- WebRTC voice/video calling, mute, camera and screen share
+- Bot command helpers: `/help`, `/roll`, `/poll`, `/remind`, `/ai`
+- WebRTC voice/video calling, mute, camera and screen-share controls
 - Responsive tablet/mobile layout
-- Explicit `/app`, `/app/`, `/app/index.html` routing
+- Official landing page with direct `/app/` navigation
 
 ## Render environment variables
 - `SUPABASE_URL`
 - `SUPABASE_KEY` (publishable/anon client key)
-- `OPENAI_API_KEY` (optional; required for Luka AI)
-- `LUKA_AI_MODEL` (optional; defaults to `gpt-5-mini`)
+- `OPENAI_API_KEY` (optional, required for Luka AI)
+- `LUKA_AI_MODEL` (optional, defaults to `gpt-5-mini`)
 
 ## Supabase
-Use `supabase_schema_v11.sql` in a fresh Supabase project. Do not mix it with the older Luka schema whose IDs used incompatible text/UUID types.
+Run `supabase_schema_v11.sql` in the SQL editor of a fresh Supabase project before using DB features. The SQL creates all required tables, RLS policies, storage buckets and realtime publication entries.
 
 ## Local
 ```bash
 npm install
 npm start
 ```
-Open `http://localhost:3000/`.
+Then open `http://localhost:3000/`.
 
-Never put an OpenAI secret key in frontend code, SQL, or GitHub.
-
-## Calling
-The app includes browser WebRTC signaling over Supabase broadcast with a public STUN server. For reliable production calls across restrictive networks, configure a TURN service.
+Never put an OpenAI secret key in frontend code, the SQL file, or GitHub.
