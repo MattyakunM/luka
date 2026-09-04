@@ -1,3 +1,4 @@
+app.use("/app", express.static(path.join(__dirname, "app")));
 const express = require("express");
 const http = require("http");
 const path = require("path");
