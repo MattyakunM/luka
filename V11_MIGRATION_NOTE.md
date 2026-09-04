@@ -1,0 +1,1 @@
+Luka V11 uses one coherent UUID-based schema. If the existing Supabase project contains older Luka tables with text/uuid mismatches, do not mix them with this schema. Use a fresh project or reset the old Luka tables before running supabase_schema_v11.sql. Back up anything important first.

@@ -1,15 +1,12 @@
 {
-  "name": "luka-v9-db-integrated",
-  "version": "9.0.0",
+  "name": "luka",
+  "version": "11.0.0",
   "private": true,
-  "scripts": {
-    "start": "node server.js"
-  },
+  "scripts": {"start": "node server.js"},
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
     "express": "^4.21.2",
-    "socket.io": "^4.8.1",
     "openai": "^5.0.0",
-    "@supabase/supabase-js": "^2.45.0"
-  },
-  "description": "Luka V9 DB integrated base"
+    "socket.io": "^4.8.1"
+  }
 }

@@ -1,25 +1,37 @@
-# Luka V10 Complete
+# Luka V11 — Complete Web Build
 
-This build is a real, connected browser implementation rather than a UI mock.
+Luka is a browser-first communication workspace with a bilingual landing page and app.
 
-## Run
-1. `npm install`
-2. `npm start`
-3. Open `http://localhost:3000`
+## Included
+- Japanese / English UI
+- Supabase Auth (email/password)
+- Profiles, usernames, status, avatars
+- Public/private spaces, rooms, owner settings
+- Realtime messages, replies, edit/delete, reactions
+- Custom reaction image upload
+- Space icon/banner upload
+- Community Hub and join flow
+- Friend requests and 1:1 DM data model
+- Luka AI server endpoint
+- Bot command helpers: `/help`, `/roll`, `/poll`, `/remind`, `/ai`
+- WebRTC voice/video calling, mute, camera and screen-share controls
+- Responsive tablet/mobile layout
+- Official landing page with direct `/app/` navigation
+
+## Render environment variables
+- `SUPABASE_URL`
+- `SUPABASE_KEY` (publishable/anon client key)
+- `OPENAI_API_KEY` (optional, required for Luka AI)
+- `LUKA_AI_MODEL` (optional, defaults to `gpt-5-mini`)
 
 ## Supabase
-Set:
-- `SUPABASE_URL`
-- `SUPABASE_KEY` (publishable/anon key)
+Run `supabase_schema_v11.sql` in the SQL editor of a fresh Supabase project before using DB features. The SQL creates all required tables, RLS policies, storage buckets and realtime publication entries.
 
-Run `supabase_schema_v10.sql` in Supabase SQL Editor, then enable email auth.
+## Local
+```bash
+npm install
+npm start
+```
+Then open `http://localhost:3000/`.
 
-## AI
-Set `OPENAI_API_KEY` on the server. Never put this secret in frontend code.
-
-## Download
-The official landing page has a working source-bundle download endpoint:
-`/api/download/source`
-
-## Important
-WebRTC UI capability is reserved in the architecture, but a full production call signaling/ICE service still needs to be deployed and tested; this build does not pretend that a non-existent call backend is finished.
+Never put an OpenAI secret key in frontend code, the SQL file, or GitHub.
