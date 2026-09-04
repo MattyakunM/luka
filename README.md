@@ -1,37 +1,41 @@
-# Luka V11 — Complete Web Build
+# Luka V11.0.1 — Verified Web Build
 
 Luka is a browser-first communication workspace with a bilingual landing page and app.
 
 ## Included
-- Japanese / English UI
+- Japanese / English landing and app UI
 - Supabase Auth (email/password)
 - Profiles, usernames, status, avatars
-- Public/private spaces, rooms, owner settings
-- Realtime messages, replies, edit/delete, reactions
+- Public/private spaces and rooms
+- Realtime message subscription
+- Replies, edit/delete and reactions
 - Custom reaction image upload
 - Space icon/banner upload
 - Community Hub and join flow
-- Friend requests and 1:1 DM data model
+- Friend requests and 1:1 DM data model/UI
 - Luka AI server endpoint
-- Bot command helpers: `/help`, `/roll`, `/poll`, `/remind`, `/ai`
-- WebRTC voice/video calling, mute, camera and screen-share controls
+- Bot Center with real `space_bots` insertion and commands
+- WebRTC voice/video calling, mute, camera and screen share
 - Responsive tablet/mobile layout
-- Official landing page with direct `/app/` navigation
+- Explicit `/app`, `/app/`, `/app/index.html` routing
 
 ## Render environment variables
 - `SUPABASE_URL`
 - `SUPABASE_KEY` (publishable/anon client key)
-- `OPENAI_API_KEY` (optional, required for Luka AI)
-- `LUKA_AI_MODEL` (optional, defaults to `gpt-5-mini`)
+- `OPENAI_API_KEY` (optional; required for Luka AI)
+- `LUKA_AI_MODEL` (optional; defaults to `gpt-5-mini`)
 
 ## Supabase
-Run `supabase_schema_v11.sql` in the SQL editor of a fresh Supabase project before using DB features. The SQL creates all required tables, RLS policies, storage buckets and realtime publication entries.
+Use `supabase_schema_v11.sql` in a fresh Supabase project. Do not mix it with the older Luka schema whose IDs used incompatible text/UUID types.
 
 ## Local
 ```bash
 npm install
 npm start
 ```
-Then open `http://localhost:3000/`.
+Open `http://localhost:3000/`.
 
-Never put an OpenAI secret key in frontend code, the SQL file, or GitHub.
+Never put an OpenAI secret key in frontend code, SQL, or GitHub.
+
+## Calling
+The app includes browser WebRTC signaling over Supabase broadcast with a public STUN server. For reliable production calls across restrictive networks, configure a TURN service.
